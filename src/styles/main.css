@@ -1,0 +1,61 @@
+:root {
+  /* Night-floor corkboard: ground sinks, polaroid whites float */
+  --surface-base: #3a2e24;
+  --surface-shadow: #1a120c;
+  --paper-cream: #f5efe0;
+  --paper-aged: #c4b396;
+  --ink-brown: #4a3b2a;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  color: var(--ink-brown);
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+/*
+  Dark cork: tile + dimming veil (no bright top highlight).
+  Goal — ground sinks; only polaroid whites read as light.
+*/
+body {
+  background-color: #241910;
+  background-image:
+    radial-gradient(ellipse at 50% 100%, rgba(8, 5, 3, 0.7), transparent 55%),
+    linear-gradient(rgba(22, 15, 10, 0.62), rgba(22, 15, 10, 0.62)),
+    url('/textures/cork.png');
+  background-repeat: no-repeat, no-repeat, repeat;
+  background-size: cover, cover, 512px 512px;
+  background-attachment: fixed, fixed, fixed;
+}
+
+.handwriting {
+  font-family: 'Klee One', 'Yomogi', cursive;
+}
+
+/* Numbers need to stay legible — do NOT use the handwriting face here. */
+.numeric {
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  font-weight: 900;
+  font-feature-settings: 'tnum' 1;
+}
+
+.page-shell {
+  min-height: 100dvh;
+  padding: calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+}
