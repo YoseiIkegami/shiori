@@ -18,4 +18,4 @@ enabled = true
 file_size_limit = "50MiB"
 
 [functions.reveal-photos]
-verify_jwt = false
+verify_jwt = true

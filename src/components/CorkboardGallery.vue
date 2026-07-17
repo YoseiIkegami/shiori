@@ -1,59 +1,94 @@
 <template>
   <div class="corkboard">
-    <!-- Quiet corner label — must not outshine the photo pile -->
-    <header class="title-tag">
-      <h1 class="handwriting">{{ tripName }}</h1>
-      <p class="sub handwriting">旅の思い出</p>
-    </header>
+    <div v-if="loading" class="board-status">
+      <MoyoLoading :size="64" />
+    </div>
 
-    <van-loading v-if="loading" class="loader" vertical>読み込み中…</van-loading>
-
-    <van-empty v-else-if="error" image="error" :description="error">
-      <van-button round type="primary" color="#c45c26" size="small" @click="emit('retry')">
+    <van-empty v-else-if="error" class="board-status" image="error" :description="error">
+      <van-button round type="primary" color="#e9a154" size="small" @click="emit('retry')">
         再試行
       </van-button>
     </van-empty>
 
-    <div v-else-if="!photos.length" class="empty handwriting">まだ写真がありません</div>
+    <div v-else-if="!photos.length" class="empty">まだ写真がありません</div>
 
-    <div
-      v-else
-      ref="galleryEl"
-      class="pile pswp-gallery"
-      :style="{ height: pileHeight }"
-    >
-      <!-- Composed polaroid JPEG is shown as-is (frame + comment baked in). -->
-      <a
-        v-for="(photo, index) in laidOut"
-        :key="photo.id"
-        :href="photo.url"
-        class="photo"
-        :style="photoStyle(photo, index)"
-        :data-pswp-width="POLAROID_WIDTH"
-        :data-pswp-height="POLAROID_HEIGHT"
-        target="_blank"
-        rel="noreferrer"
-        @click.prevent="openLightbox(index)"
+    <template v-else>
+      <div
+        ref="galleryEl"
+        class="board-container pile pswp-gallery"
       >
-        <img :src="photo.url" :alt="photo.comment || ''" loading="lazy" />
-      </a>
-    </div>
+        <div
+          v-for="(photo, index) in laidOut"
+          :key="photo.id"
+          class="photo-card"
+          :data-photo-id="photo.id"
+          :data-pswp-index="String(index)"
+          :style="cardStyle(photo, index)"
+        >
+          <a
+            :href="photo.url"
+            class="photo-card__link"
+            :style="{ '--rot': `${photo.rot}deg` }"
+            :data-pswp-width="POLAROID_WIDTH"
+            :data-pswp-height="POLAROID_HEIGHT"
+            :data-save-name="filenameFor(photo.id)"
+            target="_blank"
+            rel="noreferrer"
+            @click.prevent
+          >
+            <img :src="photo.url" :alt="photo.comment || ''" loading="lazy" />
+          </a>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="save-all-fab neu-raised"
+        :disabled="savingAll"
+        aria-label="すべて保存"
+        @click="onSaveAll"
+      >
+        <span class="fab-icon" aria-hidden="true">↓</span>
+        <span class="fab-label">{{ pendingShareFiles ? '共有を開く' : 'すべて保存' }}</span>
+      </button>
+    </template>
+
+    <Teleport to="body">
+      <MoyoLoading v-if="shareBusy" :size="88" overlay />
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import gsap from 'gsap'
+import { Draggable } from 'gsap/Draggable'
+import { InertiaPlugin } from 'gsap/InertiaPlugin'
 import PhotoSwipeLightbox from 'photoswipe/lightbox'
 import PhotoSwipe from 'photoswipe'
 import 'photoswipe/style.css'
+import { showToast } from 'vant'
 import { POLAROID_HEIGHT, POLAROID_WIDTH } from '@/lib/composePolaroid'
+import {
+  photoFilename,
+  saveAllPhotos,
+  saveSinglePhoto,
+  sharePreparedFiles,
+} from '@/lib/sharePhotos'
+import { loadPhotoPositions, savePhotoPosition } from '@/lib/photoPositions'
+import MoyoLoading from '@/components/MoyoLoading.vue'
 import type { RevealedPhoto } from '@/types'
 
+gsap.registerPlugin(Draggable, InertiaPlugin)
+
 const props = defineProps<{
+  tripId: string
   tripName: string
   photos: RevealedPhoto[]
   loading?: boolean
   error?: string | null
+  /** First unlock visit: GSAP drop with stagger amount 1.2. Return visits: skip. */
+  animateDrop?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -65,11 +100,18 @@ type LaidOut = RevealedPhoto & {
   topPct: number
   widthPct: number
   rot: number
-  delay: number
+  depth: number
 }
 
 const galleryEl = ref<HTMLElement | null>(null)
+const savingAll = ref(false)
+const shareBusy = ref(false)
+/** Prepared after a long fetch when the first share lost the user gesture. */
+const pendingShareFiles = ref<File[] | null>(null)
 let lightbox: PhotoSwipeLightbox | null = null
+let draggables: Draggable[] = []
+/** One-shot drop per trip mount cycle (avoid replaying on photo refresh). */
+let dropPlayedForTrip: string | null = null
 
 function hash(s: string): number {
   let h = 0
@@ -77,36 +119,31 @@ function hash(s: string): number {
   return Math.abs(h)
 }
 
-/**
- * Scatter photos across the board surface (not a vertical cascade).
- * More photos → taller field + slightly wider horizontal spread.
- */
-const laidOut = computed<LaidOut[]>(() => {
-  const n = props.photos.length
-  // Base field grows with count so 10+ fills the board
-  const fieldH = Math.max(420, 280 + n * 52)
+const sequenceById = computed(() => {
+  const map = new Map<string, number>()
+  props.photos.forEach((photo, index) => map.set(photo.id, index))
+  return map
+})
 
-  return props.photos.map((photo, i) => {
+function filenameFor(photoId: string): string {
+  const index = sequenceById.value.get(photoId) ?? 0
+  return photoFilename(props.tripName, index)
+}
+
+const laidOut = computed<LaidOut[]>(() => {
+  const positioned = props.photos.map((photo) => {
     const seed = hash(photo.id)
     const r1 = (seed % 1000) / 1000
     const r2 = ((seed >> 3) % 1000) / 1000
     const r3 = ((seed >> 7) % 1000) / 1000
     const r4 = ((seed >> 11) % 1000) / 1000
 
-    // Prefer DB rotation; else derive in ~[-22, 22]
     const rot = photo.rotation ?? r1 * 44 - 22
-
-    // Horizontal: keep insets so rotated edges don't clip too hard
-    const spreadX = Math.min(38, 22 + n * 1.2) // % from center
-    const leftPct = 50 + (r2 - 0.5) * 2 * spreadX
-
-    // Vertical: fill the field with mild clustering toward upper-mid
-    const topPx = 24 + r3 * (fieldH - 80) + ((i % 5) - 2) * 6
-    const topPct = (topPx / fieldH) * 100
-
-    // Size: slightly varied; shrink a bit when crowded
-    const baseW = n >= 8 ? 40 : n >= 4 ? 44 : 48
-    const widthPct = baseW + r4 * 8
+    const angle = r2 * Math.PI * 2
+    const radius = Math.pow(r3, 1.85) * 42
+    const leftPct = 50 + Math.cos(angle) * radius
+    const topPct = 49 + Math.sin(angle) * radius * 0.7
+    const widthPct = 25 + (1 - radius / 42) * 6 + r4 * 2
 
     return {
       ...photo,
@@ -114,27 +151,19 @@ const laidOut = computed<LaidOut[]>(() => {
       topPct,
       widthPct,
       rot,
-      delay: Math.min(i, 12) * 0.05,
-      // stash field height via closure for pileHeight — use shared computed below
+      depth: radius,
     }
   })
+
+  return positioned.sort((a, b) => b.depth - a.depth)
 })
 
-const pileHeight = computed(() => {
-  const n = props.photos.length
-  const fieldH = Math.max(420, 280 + n * 52)
-  // Extra room for rotated polaroid bottoms
-  return `${fieldH + 160}px`
-})
-
-function photoStyle(photo: LaidOut, index: number) {
+function cardStyle(photo: LaidOut, index: number) {
   return {
     left: `${photo.leftPct}%`,
     top: `${photo.topPct}%`,
     width: `${photo.widthPct}%`,
     zIndex: String(index + 1),
-    '--rot': `${photo.rot}deg`,
-    animationDelay: `${photo.delay}s`,
   }
 }
 
@@ -143,136 +172,369 @@ function destroyLightbox() {
   lightbox = null
 }
 
+function destroyDraggables() {
+  draggables.forEach((instance) => instance.kill())
+  draggables = []
+}
+
+const SAVE_ICON_SVG =
+  '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">' +
+  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" d="M16 6v14"/>' +
+  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M10.5 15.5 16 21l5.5-5.5"/>' +
+  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" d="M8 24h16"/>' +
+  '</svg>'
+
 function initLightbox() {
   destroyLightbox()
   if (!galleryEl.value || !props.photos.length) return
 
   lightbox = new PhotoSwipeLightbox({
     gallery: galleryEl.value,
-    children: 'a.photo',
+    children: 'a.photo-card__link',
     pswpModule: PhotoSwipe,
     padding: { top: 24, bottom: 24, left: 12, right: 12 },
-    // Board thumbs are CSS-rotated; zoom morph snaps upright — use fade.
     showHideAnimationType: 'fade',
     showAnimationDuration: 280,
     hideAnimationDuration: 240,
+    zoom: false,
+  })
+
+  lightbox.on('uiRegister', () => {
+    lightbox?.pswp?.ui?.registerElement({
+      name: 'save-button',
+      className: 'pswp__button--save-button',
+      order: 9,
+      isButton: true,
+      tagName: 'button',
+      title: '保存',
+      html: SAVE_ICON_SVG,
+      onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
+        void onSaveCurrentSlide(pswp)
+      },
+    })
   })
 
   lightbox.init()
+}
+
+function initDraggables() {
+  destroyDraggables()
+  if (!galleryEl.value || !props.photos.length) return
+
+  const saved = loadPhotoPositions(props.tripId)
+  const cards = Array.from(galleryEl.value.querySelectorAll<HTMLElement>('.photo-card'))
+
+  const endX = (card: HTMLElement) => {
+    const photoId = card.dataset.photoId
+    return photoId && saved[photoId] ? saved[photoId]!.x : 0
+  }
+  const endY = (card: HTMLElement) => {
+    const photoId = card.dataset.photoId
+    return photoId && saved[photoId] ? saved[photoId]!.y : 0
+  }
+
+  cards.forEach((card) => {
+    gsap.set(card, {
+      xPercent: -50,
+      yPercent: -50,
+      x: endX(card),
+      y: endY(card),
+      opacity: props.animateDrop ? 0 : 1,
+    })
+  })
+
+  const enableDrag = () => {
+    destroyDraggables()
+    if (!galleryEl.value) return
+    draggables = Draggable.create(cards, {
+      type: 'x,y',
+      bounds: galleryEl.value,
+      inertia: true,
+      zIndexBoost: true,
+      // ~8px: short taps open PhotoSwipe; longer moves count as drag.
+      minimumMovement: 8,
+      onClick() {
+        const index = Number((this.target as HTMLElement).dataset.pswpIndex)
+        if (Number.isFinite(index)) openLightbox(index)
+      },
+      onDragEnd() {
+        const photoId = (this.target as HTMLElement).dataset.photoId
+        if (!photoId) return
+        savePhotoPosition(props.tripId, photoId, { x: this.x, y: this.y })
+      },
+    })
+  }
+
+  if (props.animateDrop && cards.length && dropPlayedForTrip !== props.tripId) {
+    dropPlayedForTrip = props.tripId
+    gsap.fromTo(
+      cards,
+      {
+        y: (_i, el) => endY(el as HTMLElement) - 160,
+        opacity: 0,
+      },
+      {
+        y: (_i, el) => endY(el as HTMLElement),
+        opacity: 1,
+        duration: 0.65,
+        ease: 'power2.out',
+        stagger: { amount: 1.2 },
+        onComplete: enableDrag,
+      },
+    )
+  } else {
+    cards.forEach((card) => gsap.set(card, { opacity: 1 }))
+    enableDrag()
+  }
+}
+
+async function onSaveCurrentSlide(pswp: InstanceType<typeof PhotoSwipe>) {
+  const slide = pswp.currSlide
+  if (!slide?.data) return
+
+  const src = typeof slide.data.src === 'string' ? slide.data.src : null
+  if (!src) {
+    showToast('画像を取得できませんでした')
+    return
+  }
+
+  const element = slide.data.element as HTMLElement | undefined
+  const filename =
+    element?.getAttribute('data-save-name') || photoFilename(props.tripName, pswp.currIndex)
+
+  shareBusy.value = true
+
+  try {
+    const result = await saveSinglePhoto(src, filename)
+    if (result.status === 'needs_retap') {
+      showToast('共有シートを開けませんでした。ダウンロードで保存します')
+    } else if (result.status === 'downloaded') {
+      showToast('ダウンロードを開始しました')
+    }
+  } catch {
+    showToast('保存に失敗しました')
+  } finally {
+    shareBusy.value = false
+  }
 }
 
 function openLightbox(index: number) {
   lightbox?.loadAndOpen(index)
 }
 
-onMounted(async () => {
+async function onSaveAll() {
+  if (savingAll.value || !props.photos.length) return
+  savingAll.value = true
+
+  if (pendingShareFiles.value) {
+    try {
+      const result = await sharePreparedFiles(pendingShareFiles.value)
+      if (result.status === 'shared' || result.status === 'downloaded') {
+        pendingShareFiles.value = null
+      }
+      if (result.status === 'downloaded') {
+        showToast('ダウンロードを開始しました')
+      }
+    } catch {
+      showToast('保存に失敗しました')
+    } finally {
+      savingAll.value = false
+    }
+    return
+  }
+
+  shareBusy.value = true
+
+  try {
+    const result = await saveAllPhotos(
+      props.photos.map((photo) => ({ url: photo.url })),
+      props.tripName,
+    )
+
+    if (result.status === 'needs_retap') {
+      pendingShareFiles.value = result.files
+      showToast('準備ができました。もう一度「すべて保存」を押してください')
+    } else if (result.status === 'downloaded') {
+      showToast('ダウンロードを開始しました')
+    } else if (result.status === 'shared') {
+      pendingShareFiles.value = null
+    }
+  } catch {
+    showToast('保存に失敗しました')
+  } finally {
+    shareBusy.value = false
+    savingAll.value = false
+  }
+}
+
+async function setupBoard() {
   await nextTick()
   initLightbox()
+  initDraggables()
+}
+
+onMounted(() => {
+  void setupBoard()
 })
 
 watch(
-  () => props.photos,
+  () => props.tripId,
+  () => {
+    dropPlayedForTrip = null
+  },
+)
+
+watch(
+  () => [props.photos, props.tripId] as const,
   async () => {
-    await nextTick()
-    initLightbox()
+    pendingShareFiles.value = null
+    await setupBoard()
   },
 )
 
 onBeforeUnmount(() => {
+  if (galleryEl.value) gsap.killTweensOf(galleryEl.value.querySelectorAll('.photo-card'))
+  destroyDraggables()
   destroyLightbox()
 })
 </script>
 
 <style scoped>
 .corkboard {
-  min-height: calc(100dvh - 32px);
-  position: relative;
-  padding: 8px 4px 48px;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
 }
 
-/* Small, muted label tucked top-left — ground-level, not a hero card */
-.title-tag {
-  position: relative;
-  z-index: 0;
-  width: fit-content;
-  margin: 4px 0 8px 4px;
-  padding: 6px 12px 7px;
-  text-align: left;
-  color: rgba(232, 220, 192, 0.55);
-  background: rgba(40, 30, 20, 0.45);
-  border: 1px solid rgba(232, 220, 192, 0.12);
-  transform: rotate(-1.2deg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-}
-
-.title-tag h1 {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.sub {
-  margin: 1px 0 0;
-  font-size: 0.7rem;
-  opacity: 0.7;
-}
-
-.loader {
-  display: flex;
-  justify-content: center;
-  padding: 48px 0;
-  color: rgba(245, 239, 224, 0.55);
-}
-
-.empty {
-  text-align: center;
-  color: rgba(245, 239, 224, 0.5);
-  padding: 60px 0;
+.empty,
+.board-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
   font-size: 1.1rem;
 }
 
-.pile {
-  position: relative;
+.board-container {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   z-index: 1;
+  /* Clip only at the viewport edge — not an inset “wall”. */
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
-/* Soft, deep contact shadow — physical print, not sticker */
-.photo {
+.photo-card {
   position: absolute;
+  display: block;
+  cursor: grab;
+  will-change: transform;
+}
+
+.photo-card:active {
+  cursor: grabbing;
+}
+
+.photo-card__link {
   display: block;
   text-decoration: none;
   background: transparent;
   padding: 0;
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.35),
-    0 10px 28px rgba(0, 0, 0, 0.5);
-  transform: translateX(-50%) rotate(var(--rot, 0deg));
+    0 2px 3px rgba(76, 75, 70, 0.23),
+    0 9px 17px rgba(80, 78, 72, 0.22);
+  transform: rotate(var(--rot, 0deg));
   transform-origin: center center;
-  opacity: 0;
-  animation: drop-in 0.55s ease forwards;
   border-radius: 1px;
   overflow: hidden;
+  pointer-events: none;
 }
 
-@keyframes drop-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) rotate(var(--rot, 0deg)) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) rotate(var(--rot, 0deg)) scale(1);
-  }
-}
-
-.photo img {
+.photo-card__link img {
   width: 100%;
   height: auto;
-  aspect-ratio: 1200 / 1440;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   display: block;
-  background: #2a2218;
+  background: #f7f3e9;
+}
+
+.save-all-fab {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface);
+  /* Raised by .neu-raised — do not use inset here */
+  font: inherit;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.save-all-fab:disabled {
+  opacity: 0.55;
+}
+
+.save-all-fab:active:not(:disabled) {
+  box-shadow:
+    inset 6px 6px 12px var(--neu-shadow-dark),
+    inset -6px -6px 12px var(--neu-shadow-light);
+}
+
+.fab-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow:
+    3px 3px 6px var(--neu-shadow-dark),
+    -3px -3px 6px var(--neu-shadow-light);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.save-all-fab:active:not(:disabled) .fab-icon {
+  box-shadow:
+    inset 3px 3px 6px var(--neu-shadow-dark),
+    inset -3px -3px 6px var(--neu-shadow-light);
+}
+
+.fab-label {
+  padding-right: 2px;
+}
+</style>
+
+<!-- PhotoSwipe UI lives outside the component root; style globally. -->
+<style>
+.pswp__button--save-button {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+.pswp__button--save-button .pswp__icn {
+  color: #fff;
+  fill: none;
+  opacity: 1;
+}
+
+.pswp__button--zoom {
+  display: none !important;
 }
 </style>

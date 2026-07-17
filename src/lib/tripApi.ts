@@ -1,84 +1,28 @@
 import type { RevealedPhoto, Trip } from '@/types'
 import { supabase, STORAGE_BUCKET } from '@/lib/supabase'
 
-export async function fetchTrip(tripId: string): Promise<Trip | null> {
-  const { data, error } = await supabase
-    .from('trips')
-    .select('id, name, reveal_at, is_revealed, created_at')
-    .eq('id', tripId)
-    .maybeSingle()
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-  if (error) {
-    throw error
-  }
-  return data as Trip | null
+export async function fetchTrip(tripKey: string): Promise<Trip | null> {
+  const select =
+    'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, created_at'
+
+  // Prefer short slug URLs: /t/test
+  const bySlug = await supabase.from('trips').select(select).eq('slug', tripKey).maybeSingle()
+  if (bySlug.error) throw bySlug.error
+  if (bySlug.data) return bySlug.data as Trip
+
+  // Backward compatible: UUID still works if pasted (skip non-UUID to avoid 22P02).
+  if (!UUID_RE.test(tripKey)) return null
+
+  const byId = await supabase.from('trips').select(select).eq('id', tripKey).maybeSingle()
+  if (byId.error) throw byId.error
+  return byId.data as Trip | null
 }
 
-/**
- * reveal_at is stored as timestamptz (UTC). Parsing with `new Date(iso)` yields
- * a Date whose getTime() is absolute; comparing to Date.now() is timezone-safe.
- * Display strings should use local getters (getHours etc.) when needed.
- */
-export function isTripRevealed(trip: Trip, nowMs: number = Date.now()): boolean {
-  if (trip.is_revealed === true) return true
-  const revealAt = new Date(trip.reveal_at)
-  return revealAt.getTime() <= nowMs
-}
-
-export function formatCountdown(revealAtIso: string, nowMs: number = Date.now()): string {
-  const remaining = new Date(revealAtIso).getTime() - nowMs
-  if (remaining <= 0) return 'まもなく解禁'
-
-  const totalSec = Math.floor(remaining / 1000)
-  const hours = Math.floor(totalSec / 3600)
-  const minutes = Math.floor((totalSec % 3600) / 60)
-  const seconds = totalSec % 60
-
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return `あと ${days}日 ${remHours}時間`
-  }
-  if (hours > 0) {
-    return `あと ${hours}時間 ${minutes}分`
-  }
-  return `あと ${minutes}分 ${seconds}秒`
-}
-
-export type CountdownSegment = { num: string; unit: string }
-
-// Split the countdown into numeric + unit segments so the UI can render the
-// numbers in a legible sans-serif and the units in the handwriting face.
-export function formatCountdownSegments(
-  revealAtIso: string,
-  nowMs: number = Date.now(),
-): CountdownSegment[] {
-  const remaining = new Date(revealAtIso).getTime() - nowMs
-  if (remaining <= 0) return [{ num: '', unit: 'まもなく解禁' }]
-
-  const totalSec = Math.floor(remaining / 1000)
-  const hours = Math.floor(totalSec / 3600)
-  const minutes = Math.floor((totalSec % 3600) / 60)
-  const seconds = totalSec % 60
-
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return [
-      { num: String(days), unit: '日' },
-      { num: String(remHours), unit: '時間' },
-    ]
-  }
-  if (hours > 0) {
-    return [
-      { num: String(hours), unit: '時間' },
-      { num: String(minutes), unit: '分' },
-    ]
-  }
-  return [
-    { num: String(minutes), unit: '分' },
-    { num: String(seconds), unit: '秒' },
-  ]
+export function isTripRevealed(trip: Trip): boolean {
+  return trip.is_revealed === true
 }
 
 // Wide scatter (-22deg .. 22deg) for the "dropped on the floor" look.
@@ -140,9 +84,15 @@ export type RevealResponse = {
   photos: RevealedPhoto[]
 }
 
-export async function fetchRevealedPhotos(tripId: string): Promise<RevealResponse> {
+export async function fetchRevealedPhotos(
+  tripId: string,
+  options: { preview?: boolean } = {},
+): Promise<RevealResponse> {
   const { data, error } = await supabase.functions.invoke('reveal-photos', {
-    body: { trip_id: tripId },
+    body: {
+      trip_id: tripId,
+      preview: options.preview === true,
+    },
   })
 
   // functions.invoke may surface non-2xx as error while still returning JSON body

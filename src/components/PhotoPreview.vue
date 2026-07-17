@@ -1,30 +1,48 @@
 <template>
   <div class="preview">
-    <!-- Live polaroid preview: comment reflects as the user types in the sheet -->
     <div class="polaroid">
       <div class="photo-wrap">
-        <img :src="imageUrl" alt="プレビュー" />
+        <img :src="displayUrl" alt="プレビュー" />
+        <time class="photo-date">{{ stampText }}</time>
       </div>
       <button type="button" class="caption handwriting" :class="{ placeholder: !localComment.trim() }" @click="openSheet">
         {{ localComment.trim() || 'タップしてひとことを入力' }}
       </button>
     </div>
 
-    <div class="actions">
-      <van-button block round @click="emit('retake')">撮り直す</van-button>
-      <van-button block round plain hairline color="#c45c26" @click="openSheet">
-        コメントを編集
-      </van-button>
-      <van-button
-        block
-        round
-        type="primary"
-        color="#c45c26"
-        :disabled="!canProceed"
-        @click="onNext"
+    <div class="edit-panel">
+      <button
+        type="button"
+        class="filter-toggle-btn btn-control"
+        :class="`filter-${filterMode}`"
+        :aria-label="filterAriaLabel"
+        @click="cycleFilter"
       >
-        次へ
-      </van-button>
+        <svg class="pict" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="9" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
+          <circle cx="15" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
+          <circle cx="12" cy="15" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
+          <line
+            v-if="filterMode === 'none'"
+            class="none-slash"
+            x1="5"
+            y1="5"
+            x2="19"
+            y2="19"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+      <small>フィルター</small>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="soft-button secondary" @click="emit('retake')">撮り直す</button>
+      <button type="button" class="soft-button primary" :disabled="!canProceed" @click="onNext">
+        仕上がりを確認
+      </button>
     </div>
 
     <!-- Spec: comment via bottom sheet Popup (required, max 30) -->
@@ -55,7 +73,7 @@
         block
         round
         type="primary"
-        color="#c45c26"
+        color="#e9a154"
         :disabled="!canProceed"
         @click="onSheetDone"
       >
@@ -66,16 +84,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { showToast } from 'vant'
+import { formatCaptureStamp } from '@/lib/composePolaroid'
+import { nextFilterMode, type FilterMode } from '@/lib/filterMode'
+import { gradePhotoBlob } from '@/lib/polaroidTone'
 
 const props = defineProps<{
   imageUrl: string
   comment: string
+  filterMode: FilterMode
+  capturedAt?: Date
 }>()
 
 const emit = defineEmits<{
   'update:comment': [value: string]
+  'update:filterMode': [value: FilterMode]
   next: []
   retake: []
 }>()
@@ -84,8 +108,52 @@ const localComment = ref(props.comment)
 const sheetOpen = ref(true)
 const showRequiredError = ref(false)
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
+/** Canvas-graded preview (same pipeline as compose) — not CSS filter. */
+const displayUrl = ref(props.imageUrl)
+let gradedObjectUrl: string | null = null
+let gradeSeq = 0
 
 const canProceed = computed(() => localComment.value.trim().length > 0)
+const stampText = computed(() => formatCaptureStamp(props.capturedAt ?? new Date()))
+const filterAriaLabel = computed(() => {
+  if (props.filterMode === 'orange') return 'フィルター: オレンジ'
+  if (props.filterMode === 'blue') return 'フィルター: ブルー'
+  return 'フィルター: なし'
+})
+
+function revokeGradedUrl() {
+  if (gradedObjectUrl) {
+    URL.revokeObjectURL(gradedObjectUrl)
+    gradedObjectUrl = null
+  }
+}
+
+async function refreshGradedPreview() {
+  const seq = ++gradeSeq
+  const sourceUrl = props.imageUrl
+  const mode = props.filterMode
+
+  if (mode === 'none') {
+    revokeGradedUrl()
+    if (seq === gradeSeq) displayUrl.value = sourceUrl
+    return
+  }
+
+  try {
+    const sourceBlob = await fetch(sourceUrl).then((r) => r.blob())
+    const graded = await gradePhotoBlob(sourceBlob, mode, { grain: true })
+    if (seq !== gradeSeq) return
+    revokeGradedUrl()
+    gradedObjectUrl = URL.createObjectURL(graded)
+    displayUrl.value = gradedObjectUrl
+  } catch (e) {
+    console.error(e)
+    if (seq === gradeSeq) {
+      revokeGradedUrl()
+      displayUrl.value = sourceUrl
+    }
+  }
+}
 
 watch(
   () => props.comment,
@@ -94,9 +162,22 @@ watch(
   },
 )
 
+watch(
+  () => [props.imageUrl, props.filterMode] as const,
+  () => {
+    void refreshGradedPreview()
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
   await nextTick()
   textareaEl.value?.focus()
+})
+
+onBeforeUnmount(() => {
+  gradeSeq += 1
+  revokeGradedUrl()
 })
 
 function onInput() {
@@ -104,6 +185,10 @@ function onInput() {
   localComment.value = next
   emit('update:comment', next)
   if (next.trim()) showRequiredError.value = false
+}
+
+function cycleFilter() {
+  emit('update:filterMode', nextFilterMode(props.filterMode))
 }
 
 async function openSheet() {
@@ -138,21 +223,26 @@ function onNext() {
 .preview {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 420px;
+  gap: 18px;
+  max-width: 390px;
   margin: 0 auto;
-  padding-top: 12px;
+  padding: 42px 4px 18px;
 }
 
 .polaroid {
-  background: #faf6ee;
-  padding: 14px 14px 18px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-  transform: rotate(0.8deg);
+  position: relative;
+  width: min(76vw, 310px);
+  aspect-ratio: 2 / 3;
+  align-self: center;
+  background: #f7f3e9;
+  padding: 13px 13px 0;
+  box-shadow: 9px 12px 24px rgba(135, 141, 144, 0.28), -7px -7px 18px rgba(255,255,255,.9);
+  transform: rotate(0.4deg);
 }
 
 .photo-wrap {
-  aspect-ratio: 1;
+  position: relative;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
   background: #ddd;
 }
@@ -167,16 +257,34 @@ function onNext() {
 .caption {
   display: block;
   width: 100%;
-  margin: 14px 0 0;
+  margin: 9px 0 0;
   padding: 0;
   border: none;
   background: transparent;
   min-height: 1.5em;
   text-align: center;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   color: var(--ink-brown);
   word-break: break-all;
   cursor: pointer;
+}
+
+.photo-date {
+  position: absolute;
+  right: 5.5%;
+  bottom: 4.5%;
+  z-index: 1;
+  color: rgba(255, 107, 53, 0.78);
+  font-family: 'DSEG7 Classic', monospace;
+  font-style: italic;
+  font-weight: normal;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow:
+    0 0 2px rgba(255, 100, 45, 0.35),
+    0 0.5px 1px rgba(0, 0, 0, 0.22);
 }
 
 .caption.placeholder {
@@ -184,16 +292,89 @@ function onNext() {
 }
 
 .actions {
+  display: grid;
+  grid-template-columns: 0.78fr 1.22fr;
+  gap: 10px;
+}
+
+.edit-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+
+.filter-toggle-btn {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: #fff;
+  cursor: pointer;
+}
+
+.filter-toggle-btn.filter-orange {
+  background: #d6602a;
+  color: #fff;
+}
+
+.filter-toggle-btn.filter-blue {
+  background: #5b7a9e;
+  color: #fff;
+}
+
+.filter-toggle-btn.filter-none {
+  background: #fff;
+  color: #7a6f57;
+  border: 1px solid #ccc;
+}
+
+.filter-toggle-btn .pict {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.soft-button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.soft-button.secondary {
+  color: var(--text-muted);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised-sm);
+}
+
+.soft-button.primary {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 5px 7px 14px rgba(184, 126, 55, 0.28), -4px -4px 10px rgba(255, 255, 255, 0.9);
+}
+
+.soft-button.primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+  box-shadow: var(--shadow-inset);
+}
+
+.soft-button:disabled {
+  opacity: .42;
 }
 
 .sheet-title {
   margin: 0 0 4px;
   text-align: center;
   font-size: 1.2rem;
-  color: var(--ink-brown);
+  color: var(--text);
 }
 
 .sheet-hint {
@@ -206,19 +387,20 @@ function onNext() {
 .sheet-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #e0d6c4;
+  border: 0;
   border-radius: 10px;
   padding: 12px;
   resize: none;
-  background: #fffaf0;
+  background: var(--surface);
   font-size: 1.1rem;
-  color: var(--ink-brown);
+  color: var(--text);
+  box-shadow: var(--shadow-inset);
   outline: none;
   text-align: center;
 }
 
 .sheet-input:focus {
-  border-color: #c45c26;
+  box-shadow: var(--shadow-inset-deep);
 }
 
 .sheet-meta {
@@ -230,7 +412,7 @@ function onNext() {
 }
 
 .err {
-  color: #c45c26;
+  color: var(--accent);
 }
 
 .spacer {

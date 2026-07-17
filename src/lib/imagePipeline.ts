@@ -1,6 +1,6 @@
 import loadImage from 'blueimp-load-image'
 import heic2any from 'heic2any'
-import { PHOTO_SIZE } from '@/lib/composePolaroid'
+import { PHOTO_HEIGHT, PHOTO_WIDTH } from '@/lib/composePolaroid'
 
 const JPEG_QUALITY = 0.85
 
@@ -30,9 +30,9 @@ async function ensureJpegBlob(file: File): Promise<Blob> {
 }
 
 /**
- * HEIC → JPEG, EXIF orientation fix, then center-crop to a square PHOTO_SIZE canvas.
+ * HEIC → JPEG, EXIF orientation fix, then center-crop to a 3:4 canvas.
  * Do NOT draw the File directly onto canvas — Android photos would be sideways.
- * Output is always upright square JPEG (no frame / no comment yet).
+ * Output is always an upright 1080×1440 JPEG (no frame / no comment yet).
  */
 export async function processCapture(file: File): Promise<Blob> {
   const sourceBlob = await ensureJpegBlob(file)
@@ -68,10 +68,10 @@ export async function processCapture(file: File): Promise<Blob> {
     )
   })
 
-  const square = centerCropSquare(canvas, PHOTO_SIZE)
+  const cropped = centerCrop(canvas, PHOTO_WIDTH, PHOTO_HEIGHT)
 
   return new Promise<Blob>((resolve, reject) => {
-    square.toBlob(
+    cropped.toBlob(
       (b) => {
         if (b) resolve(b)
         else reject(new Error('JPEG への変換に失敗しました'))
@@ -82,21 +82,38 @@ export async function processCapture(file: File): Promise<Blob> {
   })
 }
 
-/** Center-crop to square, then scale to `size`×`size`. */
-function centerCropSquare(source: HTMLCanvasElement, size: number): HTMLCanvasElement {
+/** Center-crop to the requested aspect ratio, then scale to output dimensions. */
+function centerCrop(
+  source: HTMLCanvasElement,
+  outputWidth: number,
+  outputHeight: number,
+): HTMLCanvasElement {
   const { width, height } = source
-  const side = Math.min(width, height)
-  const sx = Math.floor((width - side) / 2)
-  const sy = Math.floor((height - side) / 2)
+  const targetRatio = outputWidth / outputHeight
+  const sourceRatio = width / height
+  const cropWidth = sourceRatio > targetRatio ? height * targetRatio : width
+  const cropHeight = sourceRatio > targetRatio ? height : width / targetRatio
+  const sx = Math.floor((width - cropWidth) / 2)
+  const sy = Math.floor((height - cropHeight) / 2)
 
   const out = document.createElement('canvas')
-  out.width = size
-  out.height = size
+  out.width = outputWidth
+  out.height = outputHeight
   const ctx = out.getContext('2d')
   if (!ctx) {
     throw new Error('Canvas 2D context unavailable')
   }
-  ctx.drawImage(source, sx, sy, side, side, 0, 0, size, size)
+  ctx.drawImage(
+    source,
+    sx,
+    sy,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    outputWidth,
+    outputHeight,
+  )
   return out
 }
 

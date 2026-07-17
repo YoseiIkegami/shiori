@@ -1,6 +1,6 @@
 <template>
-  <div class="page-shell trip-page">
-    <van-loading v-if="bootLoading" class="boot-loader" vertical>読み込み中…</van-loading>
+  <div class="page-shell trip-page" :class="{ 'is-gallery': mode === 'gallery' }">
+    <MoyoLoading v-if="bootLoading" class="boot-loader" />
 
     <van-empty
       v-else-if="bootError"
@@ -9,8 +9,13 @@
     />
 
     <template v-else-if="trip">
-      <!-- 検証用：開始前（撮影）／開始後（ギャラリー）を強制切替 -->
-      <div class="debug-toggle" role="group" aria-label="検証用モード切替">
+      <!-- 検証用：開始前／開始後（slug=test のみ。本番 trip では非表示） -->
+      <div
+        v-if="showDebugToggle"
+        class="debug-toggle"
+        role="group"
+        aria-label="検証用モード切替"
+      >
         <button
           type="button"
           class="debug-btn"
@@ -29,79 +34,101 @@
         </button>
       </div>
 
-      <!-- Mode switch is in-component state only (no router.push) -->
-      <template v-if="mode === 'shoot'">
-        <IntroModal
-          :show="showIntro"
-          :trip-id="tripId"
-          :trip-name="trip.name"
-          @close="showIntro = false"
-        />
-
-        <CountdownIdle
-          v-if="shootState === 'idle'"
-          :trip-name="trip.name"
-          :segments="countdownSegments"
-          @capture="onCapture"
-        />
-
-        <ShutterAnimation
-          v-else-if="shootState === 'shutter'"
-          :image-url="previewUrl"
-          @done="onShutterDone"
-        />
-
-        <div v-else-if="shootState === 'preview' || shootState === 'confirm' || shootState === 'sending'" class="flow">
-          <PhotoPreview
-            v-if="shootState === 'preview' && previewUrl"
-            :image-url="previewUrl"
-            v-model:comment="comment"
-            @next="goConfirm"
-            @retake="resetToIdle"
-          />
-
-          <ConfirmSend
-            v-else-if="(shootState === 'confirm' || shootState === 'sending') && previewUrl"
-            :image-url="previewUrl"
-            :sending="shootState === 'sending'"
-            :error-message="sendError"
-            @submit="onSubmit"
-            @back="backToPreview"
-          />
-        </div>
-
-        <div v-else-if="shootState === 'sent'" class="sent handwriting">
-          送信しました
-        </div>
-      </template>
-
-      <CorkboardGallery
-        v-else
-        :trip-name="trip.name"
-        :photos="galleryPhotos"
-        :loading="galleryLoading"
-        :error="galleryError"
-        @retry="loadGallery"
+      <RevealCompleteDialog
+        v-if="showRevealDialog"
+        @confirm="onRevealConfirm"
       />
+
+      <Transition v-else name="phase-fade" mode="out-in">
+        <div v-if="mode === 'shoot'" key="shoot" class="shoot-phase">
+          <CameraFrame
+            v-if="shootState === 'idle'"
+            :trip-name="trip.name"
+            :photos-count="trip.photos_count"
+            :max-photos="trip.max_photos"
+            v-model:filter-mode="filterMode"
+            @capture="onCapture"
+          />
+
+          <ShutterAnimation
+            v-else-if="shootState === 'shutter'"
+            :image-url="previewUrl"
+            @done="onShutterDone"
+          />
+
+          <div
+            v-else-if="
+              shootState === 'preview' ||
+              shootState === 'confirm' ||
+              shootState === 'sending' ||
+              shootState === 'sent'
+            "
+            class="flow"
+          >
+            <PhotoPreview
+              v-if="shootState === 'preview' && previewUrl"
+              :image-url="previewUrl"
+              :captured-at="capturedAt"
+              v-model:comment="comment"
+              v-model:filter-mode="filterMode"
+              @next="goConfirm"
+              @retake="resetToIdle"
+            />
+
+            <ConfirmSend
+              v-else-if="
+                (shootState === 'confirm' ||
+                  shootState === 'sending' ||
+                  shootState === 'sent') &&
+                previewUrl
+              "
+              :image-url="previewUrl"
+              :sending="shootState === 'sending'"
+              :fading-out="shootState === 'sent'"
+              :error-message="sendError"
+              @submit="onSubmit"
+              @back="backToPreview"
+              @fade-done="onSentFadeDone"
+            />
+          </div>
+        </div>
+
+        <CorkboardGallery
+          v-else
+          key="gallery"
+          :trip-id="trip.id"
+          :trip-name="trip.name"
+          :photos="galleryPhotos"
+          :loading="galleryLoading"
+          :error="galleryError"
+          :animate-drop="galleryAnimateDrop"
+          @retry="loadGallery"
+        />
+      </Transition>
     </template>
+
+    <Teleport to="body">
+      <MoyoLoading v-if="composeBusy" :size="88" overlay />
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { closeToast, showLoadingToast, showToast } from 'vant'
-import IntroModal from '@/components/IntroModal.vue'
-import CountdownIdle from '@/components/CountdownIdle.vue'
+import { showToast } from 'vant'
+import CameraFrame from '@/components/CameraFrame.vue'
 import ShutterAnimation from '@/components/ShutterAnimation.vue'
 import PhotoPreview from '@/components/PhotoPreview.vue'
 import ConfirmSend from '@/components/ConfirmSend.vue'
+import RevealCompleteDialog from '@/components/RevealCompleteDialog.vue'
 import CorkboardGallery from '@/components/CorkboardGallery.vue'
+import MoyoLoading from '@/components/MoyoLoading.vue'
 import { processCapture, blobToObjectUrl } from '@/lib/imagePipeline'
 import { composePolaroid } from '@/lib/composePolaroid'
+import type { FilterMode } from '@/lib/filterMode'
 import {
   fetchTrip,
   fetchRevealedPhotos,
-  formatCountdownSegments,
   isTripRevealed,
   randomRotation,
   uploadPhoto,
@@ -116,31 +143,53 @@ const trip = ref<Trip | null>(null)
 const bootLoading = ref(true)
 const bootError = ref<string | null>(null)
 const mode = ref<AppMode>('shoot')
-/** null = reveal_at に従う自動切替 / 値あり = 検証トグルで強制 */
-const debugForceMode = ref<AppMode | null>(null)
-const nowMs = ref(Date.now())
-const showIntro = ref(false)
+const debugForceMode = ref<'shoot' | 'gallery' | null>(null)
+/** 開始前／開始後トグル：/t/test のみ表示（本番 trip では出さない） */
+const showDebugToggle = computed(
+  () => trip.value?.slug === 'test' || props.tripId === 'test',
+)
+const composeBusy = ref(false)
 
 const shootState = ref<ShootState>('idle')
 const processing = ref(false)
 const shutterDone = ref(false)
-/** Square upright photo (no frame). Used for shutter + preview editing. */
+/** Upright 3:4 photo (no frame). Used for shutter + preview editing. */
 const processedBlob = ref<Blob | null>(null)
 /** Composed polaroid JPEG (frame + filter + comment). Uploaded as-is. */
 const composedBlob = ref<Blob | null>(null)
 const previewUrl = ref<string | null>(null)
 const comment = ref('')
+const filterMode = ref<FilterMode>('orange')
+const capturedAt = ref(new Date())
 const sendError = ref<string | null>(null)
 
 const galleryPhotos = ref<RevealedPhoto[]>([])
 const galleryLoading = ref(false)
 const galleryError = ref<string | null>(null)
+/** First board visit after unlock — GSAP drop intro. */
+const galleryAnimateDrop = ref(false)
+/** 「写真を撮り切りました」popup — once per trip until board_revealed is set. */
+const showRevealDialog = ref(false)
 
-const countdownSegments = computed(() =>
-  trip.value ? formatCountdownSegments(trip.value.reveal_at, nowMs.value) : [],
-)
+function boardRevealedKey(tripId: string) {
+  return `board_revealed_${tripId}`
+}
 
-let tickTimer: ReturnType<typeof setInterval> | null = null
+function hasBoardRevealed(tripId: string): boolean {
+  try {
+    return localStorage.getItem(boardRevealedKey(tripId)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markBoardRevealed(tripId: string) {
+  try {
+    localStorage.setItem(boardRevealedKey(tripId), '1')
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 function revokePreview() {
   if (previewUrl.value) {
@@ -151,28 +200,36 @@ function revokePreview() {
 
 function syncModeFromTrip() {
   if (!trip.value) return
-  // 検証トグル操作中は自動切替しない
   if (debugForceMode.value) return
-  const revealed = isTripRevealed(trip.value, nowMs.value)
-  const next: AppMode = revealed ? 'gallery' : 'shoot'
-  if (next !== mode.value) {
-    mode.value = next
-    if (next === 'gallery') {
-      void loadGallery()
-    }
+
+  if (!isTripRevealed(trip.value)) {
+    showRevealDialog.value = false
+    galleryAnimateDrop.value = false
+    mode.value = 'shoot'
+    return
+  }
+
+  // Unlocked: first visit → popup; return visits → board with no intro.
+  if (hasBoardRevealed(trip.value.id)) {
+    showRevealDialog.value = false
+    galleryAnimateDrop.value = false
+    mode.value = 'gallery'
+    void loadGallery()
+  } else {
+    showRevealDialog.value = true
+    mode.value = 'shoot'
   }
 }
 
-function setDebugMode(next: AppMode) {
+function setDebugMode(next: 'shoot' | 'gallery') {
   debugForceMode.value = next
+  showRevealDialog.value = false
   mode.value = next
   if (next === 'gallery') {
-    void loadGallery()
-  } else {
-    // 撮影フロー途中で切り替えた場合は待機画面へ戻す
-    if (shootState.value !== 'idle') {
-      resetToIdle()
-    }
+    galleryAnimateDrop.value = false
+    void loadGallery({ preview: true })
+  } else if (shootState.value !== 'idle') {
+    resetToIdle()
   }
 }
 
@@ -186,13 +243,7 @@ async function boot() {
       return
     }
     trip.value = data
-    nowMs.value = Date.now()
     syncModeFromTrip()
-
-    if (mode.value === 'shoot') {
-      const seen = localStorage.getItem(`seen_intro_${props.tripId}`)
-      showIntro.value = !seen
-    }
   } catch (e) {
     console.error(e)
     bootError.value = '旅情報の取得に失敗しました'
@@ -201,15 +252,40 @@ async function boot() {
   }
 }
 
-async function loadGallery() {
+async function loadGallery(options: { preview?: boolean } = {}) {
   galleryLoading.value = true
   galleryError.value = null
+  const preview = options.preview === true || debugForceMode.value === 'gallery'
   try {
-    const res = await fetchRevealedPhotos(props.tripId)
+    const res = await fetchRevealedPhotos(trip.value?.id ?? props.tripId, { preview })
     galleryPhotos.value = res.photos
+    if (res.trip) {
+      trip.value = {
+        ...(trip.value ?? res.trip),
+        ...res.trip,
+      }
+    }
   } catch (e) {
     console.error(e)
-    galleryError.value = e instanceof Error ? e.message : '写真の取得に失敗しました'
+    // The trip may have been reset while this page still held an old revealed state.
+    // Re-sync instead of leaving a raw Edge Function 403 on screen.
+    try {
+      const refreshed = await fetchTrip(props.tripId)
+      if (refreshed) {
+        trip.value = refreshed
+        if (!isTripRevealed(refreshed) && !preview) {
+          galleryPhotos.value = []
+          galleryError.value = null
+          if (debugForceMode.value !== 'gallery') {
+            mode.value = 'shoot'
+          }
+          return
+        }
+      }
+    } catch (refreshError) {
+      console.error(refreshError)
+    }
+    galleryError.value = '写真の取得に失敗しました'
   } finally {
     galleryLoading.value = false
   }
@@ -224,6 +300,8 @@ async function onCapture(file: File) {
   sendError.value = null
   composedBlob.value = null
   comment.value = ''
+  // Keep filterMode from the camera screen so preview matches what was set.
+  capturedAt.value = new Date()
   try {
     const processed = await processCapture(file)
     processedBlob.value = processed
@@ -259,15 +337,17 @@ async function goConfirm() {
     showToast('コメントは必須です')
     return
   }
+  // Capture mode at click time — must match what PhotoPreview just showed.
+  const modeAtConfirm = filterMode.value
   sendError.value = null
-  const loading = showLoadingToast({
-    message: '写真を仕上げています…',
-    duration: 0,
-    forbidClick: true,
-  })
+  composeBusy.value = true
   try {
-    // Bake frame + CSS nostalgic filter + comment into one upright JPEG
-    const composed = await composePolaroid(processedBlob.value, trimmed)
+    const composed = await composePolaroid(
+      processedBlob.value,
+      trimmed,
+      modeAtConfirm,
+      capturedAt.value,
+    )
     composedBlob.value = composed
     revokePreview()
     previewUrl.value = blobToObjectUrl(composed)
@@ -275,15 +355,13 @@ async function goConfirm() {
   } catch (e) {
     console.error(e)
     showToast('写真の合成に失敗しました')
-    // Stay on preview with the ungraded square photo
   } finally {
-    loading.close()
-    closeToast()
+    composeBusy.value = false
   }
 }
 
 function backToPreview() {
-  // Restore the square (non-composed) preview so the user can edit the comment
+  // Restore the non-composed 3:4 preview so the user can edit the comment.
   composedBlob.value = null
   revokePreview()
   if (processedBlob.value) {
@@ -293,7 +371,7 @@ function backToPreview() {
 }
 
 async function onSubmit() {
-  // Upload only the composed polaroid — never the raw square crop
+  // Upload only the composed polaroid — never the raw crop.
   const blob = composedBlob.value
   const trimmed = comment.value.trim().slice(0, 30)
   if (!blob || !trip.value || !trimmed) return
@@ -302,21 +380,48 @@ async function onSubmit() {
   sendError.value = null
   try {
     await uploadPhoto({
-      tripId: props.tripId,
+      tripId: trip.value.id,
       blob,
       comment: trimmed,
       rotation: randomRotation(),
     })
+    // Optimistic bump so the idle odometer ticks down when CameraFrame remounts.
+    trip.value = {
+      ...trip.value,
+      photos_count: trip.value.photos_count + 1,
+    }
     shootState.value = 'sent'
-    window.setTimeout(() => {
-      resetToIdle()
-    }, 1500)
   } catch (e) {
     console.error(e)
-    // Stay on confirm with photo intact
+    // Stay on confirm with photo intact — no fade-out on failure.
     shootState.value = 'confirm'
     sendError.value = '送信に失敗しました。もう一度お試しください。'
   }
+}
+
+async function onSentFadeDone() {
+  try {
+    const refreshed = await fetchTrip(props.tripId)
+    if (refreshed) trip.value = refreshed
+  } catch (error) {
+    console.error(error)
+  }
+
+  if (trip.value && isTripRevealed(trip.value)) {
+    resetToIdle()
+    showRevealDialog.value = true
+    return
+  }
+  resetToIdle()
+}
+
+function onRevealConfirm() {
+  if (!trip.value) return
+  markBoardRevealed(trip.value.id)
+  showRevealDialog.value = false
+  galleryAnimateDrop.value = true
+  mode.value = 'gallery'
+  void loadGallery()
 }
 
 function resetToIdle() {
@@ -325,16 +430,13 @@ function resetToIdle() {
   processedBlob.value = null
   composedBlob.value = null
   comment.value = ''
+  filterMode.value = 'orange'
   sendError.value = null
   shootState.value = 'idle'
 }
 
 onMounted(() => {
   void boot()
-  tickTimer = setInterval(() => {
-    nowMs.value = Date.now()
-    syncModeFromTrip()
-  }, 1000)
 })
 
 watch(
@@ -346,7 +448,6 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (tickTimer) clearInterval(tickTimer)
   revokePreview()
 })
 </script>
@@ -358,20 +459,41 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-/* Dev-only toggle: keep usable but blend into the dark board */
+.trip-page.is-gallery {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.shoot-phase {
+  width: 100%;
+}
+
+.phase-fade-enter-active,
+.phase-fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+
+.phase-fade-enter-from,
+.phase-fade-leave-to {
+  opacity: 0;
+}
+
 .debug-toggle {
   position: fixed;
   top: max(10px, env(safe-area-inset-top));
   right: 10px;
-  z-index: 100;
+  z-index: 10001;
   display: flex;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(18, 12, 8, 0.55);
-  border: 1px solid rgba(245, 239, 224, 0.12);
-  box-shadow: none;
-  backdrop-filter: blur(4px);
-  opacity: 0.55;
+  background: rgba(236, 239, 241, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 3px 3px 8px rgba(166, 173, 177, 0.24);
+  backdrop-filter: blur(8px);
+  opacity: 0.52;
 }
 
 .debug-toggle:hover,
@@ -387,32 +509,20 @@ onBeforeUnmount(() => {
   font-size: 11px;
   line-height: 1;
   letter-spacing: 0.04em;
-  color: rgba(245, 239, 224, 0.45);
+  color: var(--text-muted);
   background: transparent;
   cursor: pointer;
   font-family: 'Zen Kaku Gothic New', sans-serif;
 }
 
 .debug-btn.active {
-  color: rgba(245, 239, 224, 0.85);
-  background: rgba(90, 70, 50, 0.55);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
   font-weight: 600;
 }
 
 .boot-loader {
-  display: flex;
-  justify-content: center;
-  padding: 80px 0;
-  color: var(--paper-cream);
-}
-
-.sent {
-  min-height: 60dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.6rem;
-  color: var(--paper-cream);
+  padding: 120px 0;
 }
 
 .flow {

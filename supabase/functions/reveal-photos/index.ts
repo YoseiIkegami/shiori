@@ -33,9 +33,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const tripId = body?.trip_id as string | undefined
+    const tripKey = (body?.trip_id ?? body?.slug) as string | undefined
+    // Debug / design preview: allow browsing before count unlock.
+    // Remove together with the in-app 「開始後」toggle before public launch.
+    const preview = body?.preview === true
 
-    if (!tripId || typeof tripId !== 'string') {
+    if (!tripKey || typeof tripKey !== 'string') {
       return new Response(JSON.stringify({ error: 'trip_id is required' }), {
         status: 400,
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -55,11 +58,25 @@ Deno.serve(async (req) => {
     // service_role bypasses RLS — used only after reveal check below
     const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-    const { data: trip, error: tripError } = await supabase
+    const uuidRe =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+    let { data: trip, error: tripError } = await supabase
       .from('trips')
-      .select('id, name, reveal_at, is_revealed')
-      .eq('id', tripId)
+      .select('id, slug, name, reveal_at, is_revealed, photos_count, max_photos')
+      .eq('slug', tripKey)
       .maybeSingle()
+
+    // UUID fallback only when key looks like a UUID (avoids 22P02 on slugs like "test").
+    if (!trip && !tripError && uuidRe.test(tripKey)) {
+      const byId = await supabase
+        .from('trips')
+        .select('id, slug, name, reveal_at, is_revealed, photos_count, max_photos')
+        .eq('id', tripKey)
+        .maybeSingle()
+      trip = byId.data
+      tripError = byId.error
+    }
 
     if (tripError) {
       console.error('trip lookup error', tripError)
@@ -76,12 +93,9 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Re-validate reveal on the server — do not trust the client clock alone
-    const revealAt = new Date(trip.reveal_at)
-    const now = new Date()
-    const isRevealed = trip.is_revealed === true || revealAt.getTime() <= now.getTime()
-
-    if (!isRevealed) {
+    // Count-based reveal is finalized by the database trigger.
+    // `preview` is only for the temporary debug toggle.
+    if (trip.is_revealed !== true && !preview) {
       return new Response(JSON.stringify({ error: 'Trip is not revealed yet' }), {
         status: 403,
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -91,7 +105,7 @@ Deno.serve(async (req) => {
     const { data: photos, error: photosError } = await supabase
       .from('photos')
       .select('id, trip_id, storage_path, comment, rotation, created_at')
-      .eq('trip_id', tripId)
+      .eq('trip_id', trip.id)
       .order('created_at', { ascending: true })
 
     if (photosError) {
@@ -131,9 +145,12 @@ Deno.serve(async (req) => {
           id: trip.id,
           name: trip.name,
           reveal_at: trip.reveal_at,
-          is_revealed: true,
+          is_revealed: trip.is_revealed === true,
+          photos_count: trip.photos_count,
+          max_photos: trip.max_photos,
         },
         photos: withUrls.filter((p) => p.url),
+        preview: preview && trip.is_revealed !== true,
       }),
       {
         status: 200,

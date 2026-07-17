@@ -7,18 +7,18 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    CameraFrame: typeof import('./src/components/CameraFrame.vue')['default']
     ConfirmSend: typeof import('./src/components/ConfirmSend.vue')['default']
     CorkboardGallery: typeof import('./src/components/CorkboardGallery.vue')['default']
-    CountdownIdle: typeof import('./src/components/CountdownIdle.vue')['default']
-    IntroModal: typeof import('./src/components/IntroModal.vue')['default']
+    MoyoLoading: typeof import('./src/components/MoyoLoading.vue')['default']
     PhotoPreview: typeof import('./src/components/PhotoPreview.vue')['default']
+    RevealCompleteDialog: typeof import('./src/components/RevealCompleteDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ShutterAnimation: typeof import('./src/components/ShutterAnimation.vue')['default']
     VanButton: typeof import('vant/es')['Button']
     VanDialog: typeof import('vant/es')['Dialog']
     VanEmpty: typeof import('vant/es')['Empty']
-    VanLoading: typeof import('vant/es')['Loading']
     VanNoticeBar: typeof import('vant/es')['NoticeBar']
     VanPopup: typeof import('vant/es')['Popup']
   }
