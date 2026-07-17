@@ -39,6 +39,11 @@
         @confirm="onRevealConfirm"
       />
 
+      <IntroDialog
+        v-else-if="showIntroDialog"
+        @confirm="onIntroConfirm"
+      />
+
       <Transition v-else name="phase-fade" mode="out-in">
         <div v-if="mode === 'shoot'" key="shoot" class="shoot-phase">
           <CameraFrame
@@ -121,6 +126,7 @@ import ShutterAnimation from '@/components/ShutterAnimation.vue'
 import PhotoPreview from '@/components/PhotoPreview.vue'
 import ConfirmSend from '@/components/ConfirmSend.vue'
 import RevealCompleteDialog from '@/components/RevealCompleteDialog.vue'
+import IntroDialog from '@/components/IntroDialog.vue'
 import CorkboardGallery from '@/components/CorkboardGallery.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import { processCapture, blobToObjectUrl } from '@/lib/imagePipeline'
@@ -170,9 +176,15 @@ const galleryError = ref<string | null>(null)
 const galleryAnimateDrop = ref(false)
 /** 「写真を撮り切りました」popup — once per trip until board_revealed is set. */
 const showRevealDialog = ref(false)
+/** First visit intro — once per trip via localStorage. */
+const showIntroDialog = ref(false)
 
 function boardRevealedKey(tripId: string) {
   return `board_revealed_${tripId}`
+}
+
+function introSeenKey(tripId: string) {
+  return `intro_seen_${tripId}`
 }
 
 function hasBoardRevealed(tripId: string): boolean {
@@ -186,6 +198,22 @@ function hasBoardRevealed(tripId: string): boolean {
 function markBoardRevealed(tripId: string) {
   try {
     localStorage.setItem(boardRevealedKey(tripId), '1')
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function hasSeenIntro(tripId: string): boolean {
+  try {
+    return localStorage.getItem(introSeenKey(tripId)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markIntroSeen(tripId: string) {
+  try {
+    localStorage.setItem(introSeenKey(tripId), '1')
   } catch {
     /* ignore quota / private mode */
   }
@@ -206,8 +234,11 @@ function syncModeFromTrip() {
     showRevealDialog.value = false
     galleryAnimateDrop.value = false
     mode.value = 'shoot'
+    showIntroDialog.value = !hasSeenIntro(trip.value.id)
     return
   }
+
+  showIntroDialog.value = false
 
   // Unlocked: first visit → popup; return visits → board with no intro.
   if (hasBoardRevealed(trip.value.id)) {
@@ -224,6 +255,7 @@ function syncModeFromTrip() {
 function setDebugMode(next: 'shoot' | 'gallery') {
   debugForceMode.value = next
   showRevealDialog.value = false
+  showIntroDialog.value = false
   mode.value = next
   if (next === 'gallery') {
     galleryAnimateDrop.value = false
@@ -422,6 +454,12 @@ function onRevealConfirm() {
   galleryAnimateDrop.value = true
   mode.value = 'gallery'
   void loadGallery()
+}
+
+function onIntroConfirm() {
+  if (!trip.value) return
+  markIntroSeen(trip.value.id)
+  showIntroDialog.value = false
 }
 
 function resetToIdle() {

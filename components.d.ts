@@ -10,6 +10,7 @@ declare module 'vue' {
     CameraFrame: typeof import('./src/components/CameraFrame.vue')['default']
     ConfirmSend: typeof import('./src/components/ConfirmSend.vue')['default']
     CorkboardGallery: typeof import('./src/components/CorkboardGallery.vue')['default']
+    IntroDialog: typeof import('./src/components/IntroDialog.vue')['default']
     MoyoLoading: typeof import('./src/components/MoyoLoading.vue')['default']
     PhotoPreview: typeof import('./src/components/PhotoPreview.vue')['default']
     RevealCompleteDialog: typeof import('./src/components/RevealCompleteDialog.vue')['default']
