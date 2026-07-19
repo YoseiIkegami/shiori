@@ -6,7 +6,7 @@
         <time class="photo-date">{{ stampText }}</time>
       </div>
       <button type="button" class="caption handwriting" :class="{ placeholder: !localComment.trim() }" @click="openSheet">
-        {{ localComment.trim() || 'タップしてひとことを入力' }}
+        {{ localComment.trim() || 'タップしてコメントを入力' }}
       </button>
     </div>
 
@@ -45,16 +45,17 @@
       </button>
     </div>
 
-    <!-- Spec: comment via bottom sheet Popup (required, max 30) -->
+    <!-- Comment sheet: can dismiss empty; required only to proceed to confirm. -->
     <van-popup
       v-model:show="sheetOpen"
       position="bottom"
       round
-      :close-on-click-overlay="false"
+      closeable
+      close-on-click-overlay
       :style="{ padding: '20px 16px calc(20px + env(safe-area-inset-bottom))' }"
     >
       <p class="sheet-title handwriting">ひとことメッセージ</p>
-      <p class="sheet-hint">必須・30文字まで</p>
+      <p class="sheet-hint">30文字まで</p>
       <textarea
         ref="textareaEl"
         v-model="localComment"
@@ -65,18 +66,10 @@
         @input="onInput"
       />
       <div class="sheet-meta">
-        <span v-if="showRequiredError" class="err">コメントを入力してください</span>
-        <span v-else class="spacer"></span>
+        <span class="spacer"></span>
         <span class="counter">{{ localComment.length }}/30</span>
       </div>
-      <van-button
-        block
-        round
-        type="primary"
-        color="#e9a154"
-        :disabled="!canProceed"
-        @click="onSheetDone"
-      >
+      <van-button block round type="primary" color="#e9a154" @click="onSheetDone">
         入力完了
       </van-button>
     </van-popup>
@@ -84,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { showToast } from 'vant'
 import { formatCaptureStamp } from '@/lib/composePolaroid'
 import { nextFilterMode, type FilterMode } from '@/lib/filterMode'
@@ -105,8 +98,7 @@ const emit = defineEmits<{
 }>()
 
 const localComment = ref(props.comment)
-const sheetOpen = ref(true)
-const showRequiredError = ref(false)
+const sheetOpen = ref(false)
 const textareaEl = ref<HTMLTextAreaElement | null>(null)
 /** Canvas-graded preview (same pipeline as compose) — not CSS filter. */
 const displayUrl = ref(props.imageUrl)
@@ -170,11 +162,6 @@ watch(
   { immediate: true },
 )
 
-onMounted(async () => {
-  await nextTick()
-  textareaEl.value?.focus()
-})
-
 onBeforeUnmount(() => {
   gradeSeq += 1
   revokeGradedUrl()
@@ -184,7 +171,6 @@ function onInput() {
   const next = localComment.value.slice(0, 30)
   localComment.value = next
   emit('update:comment', next)
-  if (next.trim()) showRequiredError.value = false
 }
 
 function cycleFilter() {
@@ -198,20 +184,14 @@ async function openSheet() {
 }
 
 function onSheetDone() {
-  if (!canProceed.value) {
-    showRequiredError.value = true
-    showToast('コメントは必須です')
-    return
-  }
   emit('update:comment', localComment.value.trim().slice(0, 30))
   sheetOpen.value = false
 }
 
 function onNext() {
   if (!canProceed.value) {
-    showRequiredError.value = true
     void openSheet()
-    showToast('コメントは必須です')
+    showToast('コメントを入力してください')
     return
   }
   emit('update:comment', localComment.value.trim().slice(0, 30))

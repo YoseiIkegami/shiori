@@ -29,7 +29,7 @@
 | 機能 | 実装方針 |
 |---|---|
 | リンク発行 | 手動でSupabaseに1行INSERT（`trips`。`slug` で短いURL）。リンク形式は `…/t/{slug}`（例: `/t/summer-boardgames`） |
-| カメラ起動 | `<input type="file" accept="image/*" capture="environment">` |
+| カメラ起動 | 静的ビューファインダーのシャッターで `<input type="file" accept="image/*" capture="environment">` を発火（OS標準カメラ。getUserMedia は使わない） |
 | 画像形式統一 | HEIC変換（heic2any）→ EXIF回転補正（blueimp-load-image）→ 3:4（1080×1440）にセンタークロップ |
 | コメント入力（**必須**） | Vantの`Popup`で下から出るシート。全体で30文字以内（`maxlength=30`）。空文字では次へ進めない |
 | **画像合成（重要）** | **confirm時、1200×1800 Canvasに「3:4写真＋任意の軽いフィルター＋白フレーム＋コメント＋撮影日」を1枚のJPEGとして合成する。回転角・重なり順は焼き込まない** |
@@ -118,11 +118,11 @@ photos (
    ☑️ 次回以降は表示しない（localStorage: seen_intro_{trip_id}）
    ↓
 ③ カメラ画面
-   ・完成ポラロイドと同じ2:3外形。開口部（3:4）に getUserMedia ライブ映像
+   ・完成ポラロイドと同じ2:3外形。開口部（3:4）は静的な待機ビューファインダー（AFブラケット等。ライブ映像なし）
    ・外側はフレーム、内側がカメラ。下部シャッター＋「あとN枚」
-   ・getUserMedia 不可時のみ file input（capture=environment）にフォールバック
+   ・撮影は `<input type="file" accept="image/*" capture="environment">` で OS 標準カメラを起動
    ↓
-④ シャッター押下でライブ映像を1コマJPEG化（またはフォールバックで撮影）
+④ シャッター押下 → OS 標準カメラで撮影 → 選択画像を受け取る
    ↓
 ⑤′ シャッター演出（shutter）
    羽根閉開 → セピアフラッシュ → ポラロイド白枠（約2秒）

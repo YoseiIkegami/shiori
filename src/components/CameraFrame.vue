@@ -1,35 +1,14 @@
 <template>
   <section class="camera-screen" aria-label="撮影画面">
-    <!-- Same MediaStream as finder — blurred full-bleed backdrop (not a second getUserMedia). -->
-    <video
-      v-show="streamReady"
-      ref="bgVideoEl"
-      class="camera-bg-live"
-      :class="[`tone-${filterMode}`, { mirror: facingMode === 'user' }]"
-      playsinline
-      muted
-      autoplay
-      aria-hidden="true"
-    ></video>
-
     <div class="camera-body">
       <div class="device-body">
         <span class="charge-indicator" aria-hidden="true" title="チャージ"></span>
 
         <div class="finder-shell">
           <div class="finder">
-            <video
-              v-show="streamReady"
-              ref="videoEl"
-              class="live"
-              :class="[`tone-${filterMode}`, { mirror: facingMode === 'user' }]"
-              playsinline
-              muted
-              autoplay
-            ></video>
-            <div v-if="!streamReady" class="finder-fallback">
-              <p v-if="cameraError">{{ cameraError }}</p>
-              <p v-else>カメラを起動しています…</p>
+            <!-- Static idle well (no live stream). File capture opens OS camera on shutter. -->
+            <div class="finder-fallback">
+              <p>シャッターを押して撮影</p>
             </div>
           </div>
 
@@ -82,7 +61,6 @@
             type="button"
             class="side-btn camera-switch-btn btn-control"
             aria-label="カメラ切替"
-            :disabled="switchingCamera"
             @click="toggleFacing"
           >
             <svg class="pict" viewBox="0 0 24 24" aria-hidden="true">
@@ -117,7 +95,12 @@
       </div>
     </div>
 
+    <!--
+      TODO(verify-on-device): On iOS Safari, does capture still offer Photo Library?
+      Facing toggles capture=environment|user for the native camera preference.
+    -->
     <input
+      :key="facingMode"
       ref="fileInput"
       class="hidden-input"
       type="file"
@@ -149,16 +132,10 @@ const emit = defineEmits<{
 
 type Facing = 'environment' | 'user'
 
-const videoEl = ref<HTMLVideoElement | null>(null)
-const bgVideoEl = ref<HTMLVideoElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const odometerEl = ref<HTMLElement | null>(null)
-const streamReady = ref(false)
-const cameraError = ref<string | null>(null)
 const capturing = ref(false)
-const switchingCamera = ref(false)
 const facingMode = ref<Facing>('environment')
-let mediaStream: MediaStream | null = null
 let odometer: InstanceType<typeof Odometer> | null = null
 
 const remaining = computed(() => Math.max(0, props.maxPhotos - props.photosCount))
@@ -173,127 +150,15 @@ function cycleFilter() {
   emit('update:filterMode', nextFilterMode(props.filterMode))
 }
 
-async function startCamera(facing: Facing = facingMode.value) {
-  cameraError.value = null
-  streamReady.value = false
-
-  if (!window.isSecureContext) {
-    cameraError.value =
-      'ライブカメラには HTTPS（または localhost）が必要です。いまは HTTP のため起動できません'
-    return
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    cameraError.value = 'このブラウザではライブカメラを使えません'
-    return
-  }
-
-  stopCamera(false)
-
-  const tryGetUserMedia = async (constraints: MediaStreamConstraints) => {
-    mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
-    facingMode.value = facing
-    const video = videoEl.value
-    if (!video) return
-    video.srcObject = mediaStream
-    const bg = bgVideoEl.value
-    if (bg) bg.srcObject = mediaStream
-    await video.play()
-    if (bg) await bg.play().catch(() => undefined)
-    streamReady.value = true
-  }
-
-  try {
-    await tryGetUserMedia({
-      audio: false,
-      video: {
-        facingMode: { ideal: facing },
-        width: { ideal: 1440 },
-        height: { ideal: 1920 },
-      },
-    })
-  } catch (error) {
-    console.error(error)
-    const name = error instanceof DOMException ? error.name : ''
-    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      cameraError.value = 'カメラの許可が必要です。設定から許可してください'
-      return
-    }
-
-    // Desktop / no rear camera: fall back to any available camera.
-    try {
-      await tryGetUserMedia({ audio: false, video: true })
-      return
-    } catch (retryError) {
-      console.error(retryError)
-    }
-
-    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-      cameraError.value = 'カメラが見つかりませんでした'
-    } else {
-      cameraError.value = 'カメラを開けませんでした'
-    }
-  }
+function toggleFacing() {
+  facingMode.value = facingMode.value === 'environment' ? 'user' : 'environment'
+  showToast(facingMode.value === 'user' ? 'インカメラに切替' : 'アウトカメラに切替')
 }
 
-function stopCamera(_clearFacing = true) {
-  mediaStream?.getTracks().forEach((track) => track.stop())
-  mediaStream = null
-  if (videoEl.value) videoEl.value.srcObject = null
-  if (bgVideoEl.value) bgVideoEl.value.srcObject = null
-  streamReady.value = false
-}
-
-async function toggleFacing() {
-  if (switchingCamera.value) return
-  switchingCamera.value = true
-  const next: Facing = facingMode.value === 'environment' ? 'user' : 'environment'
-  try {
-    await startCamera(next)
-    if (!streamReady.value) {
-      showToast('カメラを切り替えられませんでした')
-    }
-  } finally {
-    switchingCamera.value = false
-  }
-}
-
-async function captureFromStream(): Promise<File | null> {
-  const video = videoEl.value
-  if (!video || !streamReady.value || video.videoWidth === 0) return null
-
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-
-  if (facingMode.value === 'user') {
-    ctx.translate(canvas.width, 0)
-    ctx.scale(-1, 1)
-  }
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', 0.92)
-  })
-  if (!blob) return null
-
-  return new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' })
-}
-
-async function onShutter() {
+function onShutter() {
   if (capturing.value) return
   capturing.value = true
   try {
-    if (streamReady.value) {
-      const file = await captureFromStream()
-      if (file) {
-        emit('capture', file)
-        return
-      }
-      showToast('撮影に失敗しました')
-    }
     fileInput.value?.click()
   } finally {
     capturing.value = false
@@ -326,11 +191,9 @@ watch(remaining, (value) => {
 onMounted(async () => {
   await nextTick()
   initOdometer()
-  void startCamera('environment')
 })
 
 onBeforeUnmount(() => {
-  stopCamera()
   odometer = null
 })
 </script>
@@ -341,42 +204,7 @@ onBeforeUnmount(() => {
   min-height: calc(100dvh - 28px);
   display: flex;
   flex-direction: column;
-  /* Page --surface / body gradient remains under the bg video as fallback. */
   background: transparent;
-}
-
-.camera-bg-live {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scale(1.1);
-  /* tone-* overrides append grade before / with this base look */
-  filter: blur(20px) brightness(0.8) saturate(0.9);
-  pointer-events: none;
-}
-
-.camera-bg-live.mirror {
-  transform: scale(-1.1, 1.1);
-}
-
-/* Same grade as PhotoPreview — keep live view ≈ final polaroid tone */
-.camera-bg-live.tone-orange {
-  filter:
-    sepia(12%) saturate(1.06) contrast(0.99) brightness(1.02) hue-rotate(-8deg)
-    blur(20px) brightness(0.8) saturate(0.9);
-}
-
-.camera-bg-live.tone-blue {
-  filter:
-    sepia(6%) saturate(0.96) contrast(0.99) brightness(1.02) hue-rotate(12deg)
-    blur(20px) brightness(0.8) saturate(0.9);
-}
-
-.camera-bg-live.tone-none {
-  filter: blur(20px) brightness(0.8) saturate(0.9);
 }
 
 .camera-body {
@@ -436,7 +264,6 @@ onBeforeUnmount(() => {
 }
 
 .finder {
-  /* Viewfinder well — recessed from the cream body (not neu-raised/inset utilities). */
   position: relative;
   width: 100%;
   flex: 0 0 auto;
@@ -446,32 +273,6 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 3px 3px 6px rgba(0, 0, 0, 0.35),
     inset -2px -2px 4px rgba(255, 255, 255, 0.28);
-}
-
-.live {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(1);
-}
-
-.live.mirror {
-  transform: scaleX(-1);
-}
-
-/* Match PhotoPreview.vue tone-* so finder ≈ finished grade */
-.live.tone-orange {
-  filter: sepia(12%) saturate(1.06) contrast(0.99) brightness(1.02) hue-rotate(-8deg);
-}
-
-.live.tone-blue {
-  filter: sepia(6%) saturate(0.96) contrast(0.99) brightness(1.02) hue-rotate(12deg);
-}
-
-.live.tone-none {
-  filter: none;
 }
 
 .finder-fallback {
@@ -538,10 +339,6 @@ onBeforeUnmount(() => {
   color: var(--text);
   background: #fff;
   cursor: pointer;
-}
-
-.side-btn:disabled {
-  opacity: 0.55;
 }
 
 .filter-toggle-btn.filter-orange {

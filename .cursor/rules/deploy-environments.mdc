@@ -1,0 +1,33 @@
+---
+description: SHIORI の本番／テスト環境の扱いとデプロイ禁止事項
+alwaysApply: true
+---
+
+# SHIORI デプロイ・環境ルール
+
+フロントは同一ドメイン上の SPA だが、旅（trip）ごとに URL が分かれる。運用上の環境定義は次のとおり。
+
+## 本番（運用済み）— 自動デプロイ禁止
+
+- URL: https://shiori.ikg-systems.com/t/summer-boardgames
+- **本番運用中のため、この環境への自動デプロイは禁止**
+- エージェントは依頼なく `vercel --prod` / `git push` による本番反映・本番向けデプロイを行わない
+- 動作確認・検証・実験的な操作にこの URL を使わない
+- 本番旅のデータを書き換えない（Supabase 上の該当 trip / photos を触らない）
+
+## テスト環境
+
+- 名称: **テスト環境**
+- URL: https://shiori.ikg-systems.com/t/test
+- 動作確認・検証は必ずこのテスト環境を使う
+- ユーザーが「テスト環境にデプロイ」と依頼した場合のみ、フロントをデプロイし、確認 URL として上記を案内する
+
+## 新しい旅を作る場合
+
+- `summer-boardgames` や `test` を上書き・再利用しない
+- 別の slug で新しい URL（例: `/t/{新しいslug}`）を発行する
+
+## 補足
+
+- `shiori.ikg-systems.com` のフロントビルドは全 trip で共通である
+- そのため本番デプロイはサイト全体に効くが、**検証対象は常にテスト環境**とし、本番 trip は運用対象として保護する
