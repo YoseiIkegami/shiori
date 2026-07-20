@@ -1,7 +1,8 @@
 # SHIORI — 仕様書（正本）
 
 > **正本**: 本ファイルを Phase 1 の仕様の単一の参照源とする。  
-> 実装と食い違う場合は、まず本ファイルを更新してからコードを合わせる。
+> 実装と食い違う場合は、まず本ファイルを更新してからコードを合わせる。  
+> **現行実装の整理版**: [`docs/README.md`](./docs/README.md)
 
 ## コンセプト
 
@@ -78,7 +79,7 @@ photos (
 | 全体 | 1200 × 1800 px |
 | 写真エリア | 1080 × 1440 px（上・左右マージン 60px） |
 | 下部コメント欄 | 残り 300px |
-| 撮影日スタンプ | 写真エリア**内側**右下（余白約22px）。`YYYY.MM.DD HH:MM`。**DSEG7 Classic Italic**（細め斜体7セグ）・半透明オレンジ＋ごく薄い光暈。主張を抑えてフィルム焼き込み風 |
+| 撮影日スタンプ | 写真エリア**内側**右下（余白約22px）。フォーマットは **`'YY.M.D`（2桁年・ゼロ埋めなし・時刻なし。例: `'26.7.17`）** が正本（実装 `formatCaptureStamp`）。**DSEG7 Classic Italic**（細め斜体7セグ）・半透明オレンジ＋ごく薄い光暈。主張を抑えてフィルム焼き込み風 |
 | カメラUI | 近未来の使い捨てカメラ。白い**本体外枠**（濃い落ち影）の内側にクリーム紙フレーム・カウンター・3ボタン。シアン発光のチャージドットは外枠右上。撮影エリア内にHUD装飾なし |
 
 ### 技術スタック
@@ -224,26 +225,150 @@ trip.is_revealed === true  → フローB
 
 ---
 
-## Phase 2: サービス化する場合の追加仕様
+## Phase 2: サービス展開（正本）
 
-Phase 1が成功したら追加する。
+Phase 1（個人MVP）の本番利用が成功したため、サービスとして展開する。本節が Phase 2 の単一の参照源。
+以前の Komoju・500円ベースの課金メモは破棄し、以下（Stripe Checkout）に統一する。
 
-### 課金モデル
+### 1. ビジネスモデル
 
-| プラン | 内容 | 価格 |
+- 幹事がリンク発行時に支払い。基準価格 $1（日本では日本円表示、価格は最終決定前）
+- 決済は **Stripe Checkout**（Stripe ホスト画面。Apple Pay / Google Pay 対応、通貨・言語の自動ローカライズ、PCI DSS 対応不要）
+
+保存期間オプション（価格は最終決定前）:
+
+| プラン | 期間 | 価格 |
 |---|---|---|
-| ベース | 10人まで／50枚まで／7日間保存 | 500円 |
-| 写真追加 | +10枚 / +50枚 / +100枚 | 100 / 400 / 800円 |
-| 人数追加 | +10人 | 未確定 |
-| 保存延長 | +7日 | 未確定 |
+| 標準 | 7日 | 基本料金に含む |
+| 延長1 | 1ヶ月 | 未定（+100〜300円想定） |
+| 延長2 | 1年 | 未定（+500円前後想定） |
 
-### 追加テーブル（概要）
+無期限プランは提供しない（データ無限蓄積の運用リスク回避）。
 
-- `trips` に `max_photos` / `max_members` / `payment_status` / `organizer_email` / `expires_at`
-- `orders`（Stripe/Komoju 連携）
+### 2. trip 設定
 
-### その他
+| 設定項目 | デフォルト | 変更可否 | 備考 |
+|---|---|---|---|
+| トリップ名（=slug） | 必須入力 | 発行時のみ | タイトルがそのまま公開 URL の slug になる |
+| 上限枚数 | 50枚 | 可 | 既存 `max_photos` |
+| 終了時刻 | なし（任意） | 可 | 枚数 OR 時刻、**どちらか先に達したら終了** |
+| 投稿者名の表示 | OFF | 可 | ニックネーム方式（4章） |
+| コメント必須 | ON | 可 | OFF で空コメント投稿可 |
+| 日付フォーマット | `'YY.M.D` | 可 | 選択式。変更は以降の写真から反映（撮影済みは焼き込み時のまま） |
+| 保存期間 | 7日 | 発行時のみ | 発行後の延長は追加決済（将来） |
 
-- Cloudflare R2 移行、7日後自動削除、CSAM・通報・自己削除導線
-- ドメイン: `shiori.ikg-systems.com`
-- ネイティブアプリ化は要望が出てから検討（当面 PWA）
+### 3. slug（タイトル＝URL）
+
+- 公開 URL は `/t/{slug}`、幹事 URL は `/manage/{slug}?token={短縮トークン}`
+- slug は既存カラム（`trips.slug`、UNIQUE）を継続利用。既存 `summer-boardgames` / `test` はそのまま維持
+- バリデーション: 英数字とハイフンのみ / 3〜30文字 / 大文字小文字は区別せず保存時に小文字正規化
+- 予約語（`create` / `manage` / `test` / `admin` 等、ルート衝突しうる語）は **新規作成時のみ** 使用不可。予約語は `src/lib/reservedSlugs.ts` に集約
+- 重複チェック: `/create` で入力変更時にデバウンス（300ms）で `trips` を anon SELECT。重複時は **「この名前はすでに使われています」**、形式不正は **「英数字とハイフンで 3〜30文字」** を表示し次へを非活性
+- サーバー側（`create-trip-checkout`）でも正規化・予約語・UNIQUE 違反を再検証（レース対策）
+- `/create` は 2 ステップ（なまえ → 旅の設定）。設定ステップでおすすめ値を明示する
+
+### 4. タイトルジェネレーター
+
+- `/create` のタイトル欄右の「提案」ボタンで候補を自動生成（旅・思い出テーマの単語をハイフン連結、例 `kaze-tabi`）
+- 生成直後に重複チェック。衝突時は末尾に2桁数字付与または別組み合わせで数回リトライ
+- 何度でも再生成でき、生成後も手動編集可
+
+### 5. 日付フォーマット（`date_format`）
+
+- デフォルト `'YY.M.D`（Phase 1 実装 `formatCaptureStamp` と一致。ゼロ埋めなし）
+- 許容値例: `'YY.M.D` / `'YYYY.M.D` / `'YY.M.D HH:mm` / `none`（日付非表示）
+- 焼き込み済みの写真は当時のフォーマットのまま（後から変えても再焼き込みしない）
+
+### 6. ニックネーム（詳細は 2b で実装）
+
+- **画像に焼き込まない。** 表示時にポラロイド下部余白の右下へオーバーレイ合成する（変更が過去写真すべてに即反映される）
+- 保存（Web Share）時のみ、その時点のニックネームを Canvas で焼き込んだ一時 Blob を生成して共有する
+
+### 7. 決済フロー（Stripe Checkout）
+
+```
+1. 幹事が /create で設定入力
+2. 「発行する」→ create-trip-checkout（Edge Function）が trips を payment_status='pending' で INSERT
+   ＋ Stripe Checkout Session を作成し URL を返す
+3. Stripe Checkout で支払い（Apple Pay / Google Pay / カード）
+4. stripe-webhook（checkout.session.completed）→ orders INSERT、trips.payment_status='paid'、expires_at 設定
+   （幹事メール送信は差し込み口のみ。Resend 連携は次フェーズ）
+5. success_url で共有リンク＋幹事用 URL（token 付き）を表示
+```
+
+- 未払い（pending）trip は投稿・閲覧とも不可（Edge Function・RLS 両方でガード）
+- 幹事リンクは秘密トークン付き。紛失時の復旧はメール送信フェーズで補強する予定
+
+### 8. 幹事用設定ページ
+
+- `/manage/{slug}?token={organizer_token}`（ログイン不要の秘密 URL 方式）
+- 設定変更 / 共有リンク・QR 表示 / 投稿枚数確認 / 手動終了（強制解禁）
+- token 照合は `manage-trip`（Edge Function）で行う。anon の `trips` UPDATE は許可しない
+
+### 9. データモデル（Phase 1 からの差分）
+
+```sql
+-- trips 拡張
+alter table trips add column show_nicknames  boolean not null default false;
+alter table trips add column comment_required boolean not null default true;
+alter table trips add column date_format      text    not null default 'YY.M.D';
+alter table trips add column expires_at       timestamptz;                 -- 削除バッチ参照（NULL は対象外）
+alter table trips add column payment_status   text    not null default 'pending'; -- 'pending' | 'paid'
+alter table trips add column theme_id         text    not null default 'classic';
+-- organizer_token は短縮 base62（約10文字）。UUID ではなく generate_short_token()
+-- reveal_at は nullable に変更し「終了時刻オプション」として再利用（設定時のみ時刻条件で解禁）
+
+-- 既存 trip 保護（マイグレーションでバックフィル）
+update trips set payment_status = 'paid', expires_at = null;  -- summer-boardgames / test を維持
+
+-- 投稿者（ニックネーム）
+create table members (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references trips(id) not null,
+  nickname text not null check (char_length(nickname) <= 12),
+  created_at timestamptz default now()
+);
+alter table photos add column member_id uuid references members(id);
+
+-- 決済記録
+create table orders (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references trips(id) not null,
+  stripe_session_id text not null,
+  amount int not null,
+  currency text not null,
+  type text not null,          -- 'base' | 'extend'（将来）
+  created_at timestamptz default now()
+);
+```
+
+解禁判定: `photos_count >= max_photos OR (reveal_at IS NOT NULL AND now() >= reveal_at)`。
+時刻条件は取得時に `is_revealed=true` へ lazy promote する。
+
+RLS 追加: `members` は anon INSERT＋自分（localStorage 保持 id）の UPDATE のみ、`orders` は anon 全拒否（Webhook の service_role のみ）。
+
+### 10. 運用基盤（2c）
+
+- 自動削除バッチ: Supabase Cron（pg_cron）日次。`expires_at < now()` の trip を物理削除（Storage→photos/members/trips）。**`expires_at IS NULL` は必ずスキップ**（バックフィル据え置き分の保護）
+- Cloudflare プロキシ＋CSAM Scanning Tool 有効化
+- 利用規約・プライバシーポリシー・特商法表記
+- 通報ボタン＋運営側非表示フラグ（`photos.is_hidden`）
+- ドメイン: `shiori.ikg-systems.com`。Storage は Supabase 継続、転送量増で Cloudflare R2 移行を検討（Storage 操作は 1 モジュールに集約）
+
+### 11. 将来拡張の布石
+
+- `trips.theme_id`（現時点 `'classic'` 固定）
+- フレーム描画・カメラ UI の設定値を `src/themes/classic.ts` に集約し、テーマ追加は設定オブジェクトを増やすだけで済む構造にする
+
+### 12. 実装フェーズ分割
+
+- **2a（コア）**: スキーマ拡張＋マイグレーション / トリップ作成ページ / Stripe Checkout 連携（Session 作成＋Webhook）/ payment_status ガード / 幹事設定ページ / 終了条件の複合化
+- **2b（投稿者体験）**: ニックネーム入力・変更＋オーバーレイ / 保存時の動的焼き込み / コメント必須切替 / 日付フォーマット反映
+- **2c（運用・法務／公開前必須）**: 自動削除バッチ / Cloudflare＋CSAM / 規約・プライバシー・特商法 / 通報＋非表示フラグ
+
+公開判断は 2a〜2c 完了後。
+
+### 13. 環境・デプロイ
+
+- 本番 trip `/t/summer-boardgames` は運用済み。自動デプロイ・データ改変は禁止（`.cursor/rules/deploy-environments.mdc`）
+- 動作確認はテスト環境 `/t/test` および新規作成 slug を使う

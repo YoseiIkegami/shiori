@@ -8,6 +8,12 @@
       :description="bootError"
     />
 
+    <van-empty
+      v-else-if="trip && !isPaid"
+      image="error"
+      description="この旅はまだ公開準備中です"
+    />
+
     <template v-else-if="trip">
       <!-- 検証用：開始前／開始後（slug=test のみ。本番 trip では非表示） -->
       <div
@@ -74,6 +80,7 @@
               v-if="shootState === 'preview' && previewUrl"
               :image-url="previewUrl"
               :captured-at="capturedAt"
+              :comment-required="commentRequired"
               v-model:comment="comment"
               v-model:filter-mode="filterMode"
               @next="goConfirm"
@@ -135,6 +142,7 @@ import type { FilterMode } from '@/lib/filterMode'
 import {
   fetchTrip,
   fetchRevealedPhotos,
+  isTripPaid,
   isTripRevealed,
   randomRotation,
   uploadPhoto,
@@ -154,6 +162,8 @@ const debugForceMode = ref<'shoot' | 'gallery' | null>(null)
 const showDebugToggle = computed(
   () => trip.value?.slug === 'test' || props.tripId === 'test',
 )
+const isPaid = computed(() => (trip.value ? isTripPaid(trip.value) : false))
+const commentRequired = computed(() => trip.value?.comment_required !== false)
 const composeBusy = ref(false)
 
 const shootState = ref<ShootState>('idle')
@@ -365,8 +375,8 @@ function maybeAdvanceToPreview() {
 async function goConfirm() {
   if (!processedBlob.value) return
   const trimmed = comment.value.trim().slice(0, 30)
-  if (!trimmed) {
-    showToast('コメントは必須です')
+  if (commentRequired.value && !trimmed) {
+    showToast('コメントを入力してください')
     return
   }
   // Capture mode at click time — must match what PhotoPreview just showed.
@@ -406,7 +416,8 @@ async function onSubmit() {
   // Upload only the composed polaroid — never the raw crop.
   const blob = composedBlob.value
   const trimmed = comment.value.trim().slice(0, 30)
-  if (!blob || !trip.value || !trimmed) return
+  if (!blob || !trip.value) return
+  if (commentRequired.value && !trimmed) return
 
   shootState.value = 'sending'
   sendError.value = null
@@ -527,9 +538,9 @@ onBeforeUnmount(() => {
   display: flex;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(236, 239, 241, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 3px 3px 8px rgba(166, 173, 177, 0.24);
+  background: rgba(248, 247, 244, 0.82);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-raised-sm);
   backdrop-filter: blur(8px);
   opacity: 0.52;
 }

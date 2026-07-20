@@ -19,3 +19,13 @@ file_size_limit = "50MiB"
 
 [functions.reveal-photos]
 verify_jwt = true
+
+[functions.create-trip-checkout]
+verify_jwt = true
+
+[functions.manage-trip]
+verify_jwt = true
+
+# Stripe posts directly with its own signature — no Supabase JWT.
+[functions.stripe-webhook]
+verify_jwt = false

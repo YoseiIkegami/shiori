@@ -7,17 +7,18 @@
 
 import { addMonochromeGrain, applyPolaroidTone } from '@/lib/polaroidTone'
 import type { FilterMode } from '@/lib/filterMode'
+import { classicTheme } from '@/themes/classic'
 
-export const POLAROID_WIDTH = 1200
-export const POLAROID_HEIGHT = 1800
-export const PHOTO_WIDTH = 1080
-export const PHOTO_HEIGHT = 1440
-export const FRAME_MARGIN = 60
+export const POLAROID_WIDTH = classicTheme.frame.width
+export const POLAROID_HEIGHT = classicTheme.frame.height
+export const PHOTO_WIDTH = classicTheme.frame.photoWidth
+export const PHOTO_HEIGHT = classicTheme.frame.photoHeight
+export const FRAME_MARGIN = classicTheme.frame.margin
 /** Bottom caption band: 1800 - 60 - 1440 = 300 */
 export const CAPTION_BAND = POLAROID_HEIGHT - FRAME_MARGIN - PHOTO_HEIGHT
 
-const FRAME_COLOR = '#F5EFE0'
-const INK_COLOR = '#4A3B2A'
+const FRAME_COLOR = classicTheme.frame.color
+const INK_COLOR = classicTheme.frame.ink
 const FONT_FAMILY = '"Klee One", "Yomogi", cursive'
 const BASE_FONT_SIZE = 48
 const MIN_FONT_SIZE = 28

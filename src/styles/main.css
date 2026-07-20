@@ -1,23 +1,19 @@
 :root {
-  --surface: #eceff1;
-  --surface-deep: #e1e5e7;
-  --text: #4c5357;
-  --text-muted: #858d91;
-  --accent: #e9a154;
-  --accent-pressed: #d4893f;
-  --accent-soft: #f3c48a;
+  --surface: #f8f7f4;
+  --surface-deep: #efede8;
+  --text: #2e3437;
+  --text-muted: #71777a;
+  --accent: #d96f34;
+  --accent-pressed: #bd5825;
+  --accent-soft: #f3d0b6;
   --filter-orange: #d6602a;
   --filter-blue: #5b7a9e;
-  --paper-cream: #f7f3e9;
-  --ink-brown: #4a3b2a;
-  --shadow-raised-sm: 4px 4px 9px rgba(159, 167, 172, 0.38), -4px -4px 9px rgba(255, 255, 255, 0.92);
-  --shadow-raised-md: 8px 8px 17px rgba(159, 167, 172, 0.4), -8px -8px 17px rgba(255, 255, 255, 0.92);
-  --shadow-raised-lg: 13px 16px 32px rgba(151, 159, 164, 0.36), -11px -11px 26px rgba(255, 255, 255, 0.95);
-  --shadow-inset: inset 3px 3px 7px rgba(160, 168, 173, 0.34), inset -3px -3px 7px rgba(255, 255, 255, 0.92);
-  --shadow-inset-deep: inset 5px 5px 11px rgba(139, 147, 152, 0.44), inset -4px -4px 9px rgba(255, 255, 255, 0.68);
-  /* Neumorphic pair used by raised / inset utilities */
-  --neu-shadow-dark: rgba(159, 167, 172, 0.45);
-  --neu-shadow-light: rgba(255, 255, 255, 0.95);
+  --paper-cream: #fffaf0;
+  --ink-brown: #3d3026;
+  --line: #e6e2da;
+  --shadow-raised-sm: 0 2px 6px rgba(48, 42, 34, 0.06);
+  --shadow-raised-md: 0 8px 24px rgba(48, 42, 34, 0.09);
+  --shadow-raised-lg: 0 18px 48px rgba(48, 42, 34, 0.13);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -42,26 +38,16 @@ body,
   height: 100%;
   min-height: 100%;
   min-height: 100dvh;
-  touch-action: none;
-  overscroll-behavior: none;
-}
-
-html {
-  overflow: hidden;
+  overscroll-behavior-x: none;
 }
 
 body {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
   color: var(--text);
-  background:
-    radial-gradient(circle at 50% -15%, rgba(255, 255, 255, 0.95), transparent 42%),
-    var(--surface);
+  background: var(--surface);
 }
 
 #app {
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .handwriting {
@@ -92,6 +78,55 @@ body {
   padding: calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
 }
 
+.page-shell.flow-page {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+.flow-shell {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: calc(12px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
+}
+
+.flow-divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 28px 0;
+}
+
+.flow-section-title {
+  margin: 0 0 18px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-brown);
+}
+
+.flow-text-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.flow-text-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.flow-step {
+  margin-left: auto;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .board-container {
   touch-action: none;
   overscroll-behavior: none;
@@ -115,14 +150,92 @@ body {
 }
 
 /* Neumorphic raised (default) / inset (pressed or selected) */
-.neu-raised {
-  box-shadow:
-    6px 6px 12px var(--neu-shadow-dark),
-    -6px -6px 12px var(--neu-shadow-light);
+.neu-raised { box-shadow: var(--shadow-raised-sm); }
+.neu-inset { box-shadow: none; border: 1px solid var(--line); }
+
+/* Trip flow pages (home / create / success / manage) */
+.flow-page {
+  background: var(--surface);
+  color: var(--text);
 }
 
-.neu-inset {
-  box-shadow:
-    inset 6px 6px 12px var(--neu-shadow-dark),
-    inset -6px -6px 12px var(--neu-shadow-light);
+.ticket-frame {
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--paper-cream);
+  border: 1px solid #eee5d7;
+  box-shadow: none;
+}
+
+.ticket-frame.ok {
+  border-left-color: rgba(90, 143, 106, 0.5);
+}
+
+.ticket-frame.err {
+  border-left-color: rgba(214, 96, 42, 0.7);
+}
+
+.flow-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px 14px;
+  background: #fff;
+  font: inherit;
+  color: var(--text);
+  outline: none;
+}
+
+.flow-btn {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.flow-btn.primary {
+  width: 100%;
+  min-height: 54px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.flow-btn.primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+
+.flow-btn.primary:disabled {
+  background: #e9e5df;
+  color: #9b938a;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.flow-btn.ghost {
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0 14px;
+}
+
+.flow-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+@keyframes ticket-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) rotate(-0.6deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+}
+
+.ticket-rise {
+  animation: ticket-rise 0.55s ease-out both;
 }

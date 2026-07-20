@@ -83,12 +83,16 @@ import { formatCaptureStamp } from '@/lib/composePolaroid'
 import { nextFilterMode, type FilterMode } from '@/lib/filterMode'
 import { gradePhotoBlob } from '@/lib/polaroidTone'
 
-const props = defineProps<{
-  imageUrl: string
-  comment: string
-  filterMode: FilterMode
-  capturedAt?: Date
-}>()
+const props = withDefaults(
+  defineProps<{
+    imageUrl: string
+    comment: string
+    filterMode: FilterMode
+    capturedAt?: Date
+    commentRequired?: boolean
+  }>(),
+  { commentRequired: true },
+)
 
 const emit = defineEmits<{
   'update:comment': [value: string]
@@ -105,7 +109,9 @@ const displayUrl = ref(props.imageUrl)
 let gradedObjectUrl: string | null = null
 let gradeSeq = 0
 
-const canProceed = computed(() => localComment.value.trim().length > 0)
+const canProceed = computed(
+  () => !props.commentRequired || localComment.value.trim().length > 0,
+)
 const stampText = computed(() => formatCaptureStamp(props.capturedAt ?? new Date()))
 const filterAriaLabel = computed(() => {
   if (props.filterMode === 'orange') return 'フィルター: オレンジ'

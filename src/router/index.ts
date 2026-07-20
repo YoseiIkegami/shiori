@@ -10,6 +10,22 @@ const router = createRouter({
       component: () => import('@/pages/HomePage.vue'),
     },
     {
+      path: '/create',
+      name: 'create',
+      component: () => import('@/pages/CreateTripPage.vue'),
+    },
+    {
+      path: '/create/success',
+      name: 'create-success',
+      component: () => import('@/pages/CheckoutSuccessPage.vue'),
+    },
+    {
+      path: '/manage/:slug',
+      name: 'manage',
+      component: () => import('@/pages/ManageTripPage.vue'),
+      props: true,
+    },
+    {
       path: '/t/:tripId',
       name: 'trip',
       component: TripPage,

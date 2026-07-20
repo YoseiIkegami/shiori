@@ -61,9 +61,12 @@ Deno.serve(async (req) => {
     const uuidRe =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+    const tripSelect =
+      'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, payment_status'
+
     let { data: trip, error: tripError } = await supabase
       .from('trips')
-      .select('id, slug, name, reveal_at, is_revealed, photos_count, max_photos')
+      .select(tripSelect)
       .eq('slug', tripKey)
       .maybeSingle()
 
@@ -71,7 +74,7 @@ Deno.serve(async (req) => {
     if (!trip && !tripError && uuidRe.test(tripKey)) {
       const byId = await supabase
         .from('trips')
-        .select('id, slug, name, reveal_at, is_revealed, photos_count, max_photos')
+        .select(tripSelect)
         .eq('id', tripKey)
         .maybeSingle()
       trip = byId.data
@@ -93,7 +96,26 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Count-based reveal is finalized by the database trigger.
+    // Unpaid trips are not viewable (Phase 2 gate). Backfilled trips are 'paid'.
+    if (trip.payment_status !== 'paid' && !preview) {
+      return new Response(JSON.stringify({ error: 'Trip is not paid' }), {
+        status: 402,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Composite reveal: promote when the optional end time has passed.
+    if (trip.is_revealed !== true && trip.reveal_at && Date.parse(trip.reveal_at) <= Date.now()) {
+      const { error: promoteError } = await supabase
+        .from('trips')
+        .update({ is_revealed: true })
+        .eq('id', trip.id)
+        .neq('is_revealed', true)
+      if (promoteError) console.error('time-based promote error', promoteError)
+      else trip.is_revealed = true
+    }
+
+    // Count-based reveal is finalized by the database trigger; time-based handled above.
     // `preview` is only for the temporary debug toggle.
     if (trip.is_revealed !== true && !preview) {
       return new Response(JSON.stringify({ error: 'Trip is not revealed yet' }), {
@@ -143,11 +165,13 @@ Deno.serve(async (req) => {
       JSON.stringify({
         trip: {
           id: trip.id,
+          slug: trip.slug,
           name: trip.name,
           reveal_at: trip.reveal_at,
           is_revealed: trip.is_revealed === true,
           photos_count: trip.photos_count,
           max_photos: trip.max_photos,
+          payment_status: trip.payment_status,
         },
         photos: withUrls.filter((p) => p.url),
         preview: preview && trip.is_revealed !== true,
