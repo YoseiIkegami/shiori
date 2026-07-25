@@ -5,7 +5,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const TRIP_SELECT =
-  'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, ' +
+  'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
   'show_nicknames, comment_required, date_format, expires_at, payment_status, theme_id, created_at'
 
 export async function fetchTrip(tripKey: string): Promise<Trip | null> {
@@ -80,6 +80,7 @@ export async function uploadPhoto(params: {
   blob: Blob
   comment: string
   rotation: number
+  memberId?: string | null
 }): Promise<void> {
   const fileId = generateUuid()
   const storagePath = `${params.tripId}/${fileId}.jpg`
@@ -95,16 +96,63 @@ export async function uploadPhoto(params: {
     throw uploadError
   }
 
-  const { error: insertError } = await supabase.from('photos').insert({
+  const row: Record<string, unknown> = {
     trip_id: params.tripId,
     storage_path: storagePath,
     comment: params.comment.slice(0, 30),
     rotation: params.rotation,
-  })
+  }
+  if (params.memberId) row.member_id = params.memberId
+
+  const { error: insertError } = await supabase.from('photos').insert(row)
 
   if (insertError) {
     throw insertError
   }
+}
+
+export function memberStorageKey(tripId: string): string {
+  return `member_${tripId}`
+}
+
+export function loadStoredMemberId(tripId: string): string | null {
+  try {
+    return localStorage.getItem(memberStorageKey(tripId))
+  } catch {
+    return null
+  }
+}
+
+export function storeMemberId(tripId: string, memberId: string): void {
+  try {
+    localStorage.setItem(memberStorageKey(tripId), memberId)
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+export async function createMember(tripId: string, nickname: string): Promise<string> {
+  const trimmed = nickname.trim().slice(0, 12)
+  if (!trimmed) throw new Error('名前を入力してください')
+  const { data, error } = await supabase.rpc('create_member', {
+    p_trip_id: tripId,
+    p_nickname: trimmed,
+  })
+  if (error) throw error
+  if (!data) throw new Error('メンバーの作成に失敗しました')
+  const id = data as string
+  storeMemberId(tripId, id)
+  return id
+}
+
+export async function updateMemberNickname(memberId: string, nickname: string): Promise<void> {
+  const trimmed = nickname.trim().slice(0, 12)
+  if (!trimmed) throw new Error('名前を入力してください')
+  const { error } = await supabase.rpc('update_member_nickname', {
+    p_id: memberId,
+    p_nickname: trimmed,
+  })
+  if (error) throw error
 }
 
 export type RevealResponse = {
@@ -137,14 +185,17 @@ export async function fetchRevealedPhotos(
 export type CreateTripCheckoutInput = {
   slug: string
   name?: string
-  max_photos: number
+  plan_id: 'free' | 'standard' | 'plus'
+  currency: 'jpy' | 'usd'
   reveal_at: string | null
   comment_required: boolean
   show_nicknames: boolean
   date_format: string
 }
 
-export async function createTripCheckout(input: CreateTripCheckoutInput): Promise<{ url: string }> {
+export async function createTripCheckout(
+  input: CreateTripCheckoutInput,
+): Promise<{ url: string; free?: boolean; slug?: string; organizer_token?: string }> {
   const { data, error } = await supabase.functions.invoke('create-trip-checkout', {
     body: {
       ...input,
@@ -156,7 +207,22 @@ export async function createTripCheckout(input: CreateTripCheckoutInput): Promis
   }
   if (error) throw error
   if (!data?.url) throw new Error('Checkout URL が取得できませんでした')
-  return { url: data.url as string }
+  return {
+    url: data.url as string,
+    free: Boolean(data.free),
+    slug: data.slug as string | undefined,
+    organizer_token: data.organizer_token as string | undefined,
+  }
+}
+
+export async function deleteFreeTrip(slug: string, token: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('create-trip-checkout', {
+    body: { action: 'delete_free', slug, token },
+  })
+  if (data?.error) {
+    throw new Error(typeof data.error === 'string' ? data.error : '削除に失敗しました')
+  }
+  if (error) throw error
 }
 
 export async function fetchCheckoutResult(sessionId: string): Promise<{
@@ -203,4 +269,14 @@ export async function manageTripUpdate(
 export async function manageTripEnd(slug: string, token: string): Promise<ManageTrip> {
   const data = await manageTripInvoke({ action: 'end', slug, token })
   return data.trip as ManageTrip
+}
+
+export async function reportPhoto(photoId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('report-photo', {
+    body: { photo_id: photoId },
+  })
+  if (data?.error) {
+    throw new Error(typeof data.error === 'string' ? data.error : '通報に失敗しました')
+  }
+  if (error) throw error
 }

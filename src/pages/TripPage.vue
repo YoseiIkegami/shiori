@@ -50,8 +50,24 @@
         @confirm="onIntroConfirm"
       />
 
+      <NicknameDialog
+        v-else-if="showNicknameDialog"
+        :initial="nicknameDraft"
+        :busy="nickBusy"
+        @confirm="onNicknameConfirm"
+      />
+
       <Transition v-else name="phase-fade" mode="out-in">
         <div v-if="mode === 'shoot'" key="shoot" class="shoot-phase">
+          <button
+            v-if="showNicknames && memberId && shootState === 'idle'"
+            type="button"
+            class="nick-chip handwriting"
+            @click="openNicknameEdit"
+          >
+            {{ nicknameDraft || '名前' }}
+          </button>
+
           <CameraFrame
             v-if="shootState === 'idle'"
             :trip-name="trip.name"
@@ -81,6 +97,7 @@
               :image-url="previewUrl"
               :captured-at="capturedAt"
               :comment-required="commentRequired"
+              :date-format="dateFormat"
               v-model:comment="comment"
               v-model:filter-mode="filterMode"
               @next="goConfirm"
@@ -111,10 +128,12 @@
           :trip-id="trip.id"
           :trip-name="trip.name"
           :photos="galleryPhotos"
+          :show-nicknames="showNicknames"
           :loading="galleryLoading"
           :error="galleryError"
           :animate-drop="galleryAnimateDrop"
           @retry="loadGallery"
+          @reported="onPhotoReported"
         />
       </Transition>
     </template>
@@ -134,20 +153,25 @@ import PhotoPreview from '@/components/PhotoPreview.vue'
 import ConfirmSend from '@/components/ConfirmSend.vue'
 import RevealCompleteDialog from '@/components/RevealCompleteDialog.vue'
 import IntroDialog from '@/components/IntroDialog.vue'
+import NicknameDialog from '@/components/NicknameDialog.vue'
 import CorkboardGallery from '@/components/CorkboardGallery.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import { processCapture, blobToObjectUrl } from '@/lib/imagePipeline'
 import { composePolaroid } from '@/lib/composePolaroid'
 import type { FilterMode } from '@/lib/filterMode'
 import {
+  createMember,
+  deleteFreeTrip,
   fetchTrip,
   fetchRevealedPhotos,
   isTripPaid,
   isTripRevealed,
+  loadStoredMemberId,
   randomRotation,
+  updateMemberNickname,
   uploadPhoto,
 } from '@/lib/tripApi'
-import type { AppMode, RevealedPhoto, ShootState, Trip } from '@/types'
+import type { AppMode, DateFormat, RevealedPhoto, ShootState, Trip } from '@/types'
 
 const props = defineProps<{
   tripId: string
@@ -164,6 +188,8 @@ const showDebugToggle = computed(
 )
 const isPaid = computed(() => (trip.value ? isTripPaid(trip.value) : false))
 const commentRequired = computed(() => trip.value?.comment_required !== false)
+const showNicknames = computed(() => trip.value?.show_nicknames === true)
+const dateFormat = computed<DateFormat>(() => trip.value?.date_format ?? 'YY.M.D')
 const composeBusy = ref(false)
 
 const shootState = ref<ShootState>('idle')
@@ -178,6 +204,9 @@ const comment = ref('')
 const filterMode = ref<FilterMode>('orange')
 const capturedAt = ref(new Date())
 const sendError = ref<string | null>(null)
+const memberId = ref<string | null>(null)
+const nicknameDraft = ref('')
+const nickBusy = ref(false)
 
 const galleryPhotos = ref<RevealedPhoto[]>([])
 const galleryLoading = ref(false)
@@ -188,6 +217,7 @@ const galleryAnimateDrop = ref(false)
 const showRevealDialog = ref(false)
 /** First visit intro — once per trip via localStorage. */
 const showIntroDialog = ref(false)
+const showNicknameDialog = ref(false)
 
 function boardRevealedKey(tripId: string) {
   return `board_revealed_${tripId}`
@@ -245,10 +275,14 @@ function syncModeFromTrip() {
     galleryAnimateDrop.value = false
     mode.value = 'shoot'
     showIntroDialog.value = !hasSeenIntro(trip.value.id)
+    memberId.value = loadStoredMemberId(trip.value.id)
+    showNicknameDialog.value =
+      !showIntroDialog.value && showNicknames.value && !memberId.value
     return
   }
 
   showIntroDialog.value = false
+  showNicknameDialog.value = false
 
   // Unlocked: first visit → popup; return visits → board with no intro.
   if (hasBoardRevealed(trip.value.id)) {
@@ -266,6 +300,7 @@ function setDebugMode(next: 'shoot' | 'gallery') {
   debugForceMode.value = next
   showRevealDialog.value = false
   showIntroDialog.value = false
+  showNicknameDialog.value = false
   mode.value = next
   if (next === 'gallery') {
     galleryAnimateDrop.value = false
@@ -389,6 +424,7 @@ async function goConfirm() {
       trimmed,
       modeAtConfirm,
       capturedAt.value,
+      dateFormat.value,
     )
     composedBlob.value = composed
     revokePreview()
@@ -427,6 +463,7 @@ async function onSubmit() {
       blob,
       comment: trimmed,
       rotation: randomRotation(),
+      memberId: showNicknames.value ? memberId.value : null,
     })
     // Optimistic bump so the idle odometer ticks down when CameraFrame remounts.
     trip.value = {
@@ -458,6 +495,10 @@ async function onSentFadeDone() {
   resetToIdle()
 }
 
+function onPhotoReported(photoId: string) {
+  galleryPhotos.value = galleryPhotos.value.filter((p) => p.id !== photoId)
+}
+
 function onRevealConfirm() {
   if (!trip.value) return
   markBoardRevealed(trip.value.id)
@@ -471,6 +512,31 @@ function onIntroConfirm() {
   if (!trip.value) return
   markIntroSeen(trip.value.id)
   showIntroDialog.value = false
+  memberId.value = loadStoredMemberId(trip.value.id)
+  showNicknameDialog.value = showNicknames.value && !memberId.value
+}
+
+function openNicknameEdit() {
+  showNicknameDialog.value = true
+}
+
+async function onNicknameConfirm(nickname: string) {
+  if (!trip.value || nickBusy.value) return
+  nickBusy.value = true
+  try {
+    if (memberId.value) {
+      await updateMemberNickname(memberId.value, nickname)
+    } else {
+      memberId.value = await createMember(trip.value.id, nickname)
+    }
+    nicknameDraft.value = nickname.trim().slice(0, 12)
+    showNicknameDialog.value = false
+  } catch (e) {
+    console.error(e)
+    showToast(e instanceof Error ? e.message : '名前の保存に失敗しました')
+  } finally {
+    nickBusy.value = false
+  }
 }
 
 function resetToIdle() {
@@ -486,6 +552,7 @@ function resetToIdle() {
 
 onMounted(() => {
   void boot()
+  window.addEventListener('pagehide', onPageHide)
 })
 
 watch(
@@ -496,7 +563,32 @@ watch(
   },
 )
 
+function freeTokenKey(slug: string) {
+  return `shiori.free.${slug}`
+}
+
+function onPageHide() {
+  const t = trip.value
+  if (!t || t.plan_id !== 'free' || !t.slug) return
+  let token = ''
+  try {
+    token = sessionStorage.getItem(freeTokenKey(t.slug)) ?? ''
+  } catch {
+    return
+  }
+  if (!token) return
+  void deleteFreeTrip(t.slug, token).then(() => {
+    try {
+      sessionStorage.removeItem(freeTokenKey(t.slug))
+    } catch {
+      /* ignore */
+    }
+  })
+}
+
 onBeforeUnmount(() => {
+  window.removeEventListener('pagehide', onPageHide)
+  onPageHide()
   revokePreview()
 })
 </script>
@@ -518,6 +610,26 @@ onBeforeUnmount(() => {
 
 .shoot-phase {
   width: 100%;
+  position: relative;
+}
+
+.nick-chip {
+  position: absolute;
+  top: calc(12px + var(--safe-top, 0px));
+  right: 16px;
+  z-index: 5;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  color: var(--ink-brown);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 4px rgba(60, 50, 40, 0.12);
+  cursor: pointer;
 }
 
 .phase-fade-enter-active,
@@ -561,7 +673,7 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
-  font-family: 'Zen Kaku Gothic New', sans-serif;
+  font-family: var(--font-ui);
 }
 
 .debug-btn.active {

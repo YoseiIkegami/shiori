@@ -5,7 +5,7 @@
     </div>
 
     <van-empty v-else-if="error" class="board-status" image="error" :description="error">
-      <van-button round type="primary" color="#e9a154" size="small" @click="emit('retry')">
+      <van-button round type="primary" color="#bd5825" size="small" @click="emit('retry')">
         再試行
       </van-button>
     </van-empty>
@@ -32,11 +32,17 @@
             :data-pswp-width="POLAROID_WIDTH"
             :data-pswp-height="POLAROID_HEIGHT"
             :data-save-name="filenameFor(photo.id)"
+            :data-photo-id="photo.id"
+            :data-nickname="overlayNickname(photo) ?? undefined"
             target="_blank"
             rel="noreferrer"
             @click.prevent
           >
             <img :src="photo.url" :alt="photo.comment || ''" loading="lazy" />
+            <span
+              v-if="overlayNickname(photo)"
+              class="photo-card__nick handwriting"
+            >{{ overlayNickname(photo) }}</span>
           </a>
         </div>
       </div>
@@ -75,6 +81,7 @@ import {
   saveSinglePhoto,
   sharePreparedFiles,
 } from '@/lib/sharePhotos'
+import { reportPhoto } from '@/lib/tripApi'
 import { loadPhotoPositions, savePhotoPosition } from '@/lib/photoPositions'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import type { RevealedPhoto } from '@/types'
@@ -85,14 +92,22 @@ const props = defineProps<{
   tripId: string
   tripName: string
   photos: RevealedPhoto[]
+  showNicknames?: boolean
   loading?: boolean
   error?: string | null
   /** First unlock visit: GSAP drop with stagger amount 1.2. Return visits: skip. */
   animateDrop?: boolean
 }>()
 
+function overlayNickname(photo: RevealedPhoto): string | null {
+  if (!props.showNicknames) return null
+  const name = photo.nickname?.trim()
+  return name ? name.slice(0, 12) : null
+}
+
 const emit = defineEmits<{
   retry: []
+  reported: [photoId: string]
 }>()
 
 type LaidOut = RevealedPhoto & {
@@ -184,6 +199,12 @@ const SAVE_ICON_SVG =
   '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" d="M8 24h16"/>' +
   '</svg>'
 
+const REPORT_ICON_SVG =
+  '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">' +
+  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M8 6v20"/>' +
+  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M8 7h14l-3 5 3 5H8"/>' +
+  '</svg>'
+
 function initLightbox() {
   destroyLightbox()
   if (!galleryEl.value || !props.photos.length) return
@@ -212,6 +233,39 @@ function initLightbox() {
         void onSaveCurrentSlide(pswp)
       },
     })
+
+    lightbox?.pswp?.ui?.registerElement({
+      name: 'report-button',
+      className: 'pswp__button--report-button',
+      order: 10,
+      isButton: true,
+      tagName: 'button',
+      title: '通報',
+      html: REPORT_ICON_SVG,
+      onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
+        void onReportCurrentSlide(pswp)
+      },
+    })
+
+    if (props.showNicknames) {
+      lightbox?.pswp?.ui?.registerElement({
+        name: 'nickname-caption',
+        className: 'pswp__nickname handwriting',
+        order: 9,
+        appendTo: 'root',
+        onInit: (el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
+          const sync = () => {
+            const slide = pswp.currSlide
+            const element = slide?.data?.element as HTMLElement | undefined
+            const nick = element?.getAttribute('data-nickname')?.trim()
+            el.textContent = nick || ''
+            el.hidden = !nick
+          }
+          pswp.on('change', sync)
+          sync()
+        },
+      })
+    }
   })
 
   lightbox.init()
@@ -301,11 +355,14 @@ async function onSaveCurrentSlide(pswp: InstanceType<typeof PhotoSwipe>) {
   const element = slide.data.element as HTMLElement | undefined
   const filename =
     element?.getAttribute('data-save-name') || photoFilename(props.tripName, pswp.currIndex)
+  const nickname = props.showNicknames
+    ? element?.getAttribute('data-nickname')
+    : null
 
   shareBusy.value = true
 
   try {
-    const result = await saveSinglePhoto(src, filename)
+    const result = await saveSinglePhoto(src, filename, nickname)
     if (result.status === 'needs_retap') {
       showToast('共有シートを開けませんでした。ダウンロードで保存します')
     } else if (result.status === 'downloaded') {
@@ -313,6 +370,28 @@ async function onSaveCurrentSlide(pswp: InstanceType<typeof PhotoSwipe>) {
     }
   } catch {
     showToast('保存に失敗しました')
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function onReportCurrentSlide(pswp: InstanceType<typeof PhotoSwipe>) {
+  const element = pswp.currSlide?.data?.element as HTMLElement | undefined
+  const photoId = element?.getAttribute('data-photo-id')
+  if (!photoId) {
+    showToast('通報できませんでした')
+    return
+  }
+  if (!window.confirm('この写真を通報しますか？')) return
+
+  shareBusy.value = true
+  try {
+    await reportPhoto(photoId)
+    pswp.close()
+    emit('reported', photoId)
+    showToast('通報しました')
+  } catch {
+    showToast('通報に失敗しました')
   } finally {
     shareBusy.value = false
   }
@@ -347,7 +426,10 @@ async function onSaveAll() {
 
   try {
     const result = await saveAllPhotos(
-      props.photos.map((photo) => ({ url: photo.url })),
+      props.photos.map((photo) => ({
+        url: photo.url,
+        nickname: props.showNicknames ? photo.nickname : null,
+      })),
       props.tripName,
     )
 
@@ -441,6 +523,7 @@ onBeforeUnmount(() => {
 }
 
 .photo-card__link {
+  position: relative;
   display: block;
   text-decoration: none;
   background: transparent;
@@ -462,6 +545,21 @@ onBeforeUnmount(() => {
   object-fit: cover;
   display: block;
   background: #f7f3e9;
+}
+
+.photo-card__nick {
+  position: absolute;
+  right: 6%;
+  bottom: 3.5%;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(0.55rem, 2.4vw, 0.78rem);
+  line-height: 1.1;
+  color: #3a342c;
+  text-align: right;
+  pointer-events: none;
 }
 
 .save-all-fab {
@@ -491,9 +589,7 @@ onBeforeUnmount(() => {
 }
 
 .save-all-fab:active:not(:disabled) {
-  box-shadow:
-    inset 6px 6px 12px var(--neu-shadow-dark),
-    inset -6px -6px 12px var(--neu-shadow-light);
+  box-shadow: var(--shadow-inset);
 }
 
 .fab-icon {
@@ -503,17 +599,13 @@ onBeforeUnmount(() => {
   place-items: center;
   border-radius: 50%;
   background: var(--surface);
-  box-shadow:
-    3px 3px 6px var(--neu-shadow-dark),
-    -3px -3px 6px var(--neu-shadow-light);
+  box-shadow: var(--shadow-raised-sm);
   font-size: 0.95rem;
   line-height: 1;
 }
 
 .save-all-fab:active:not(:disabled) .fab-icon {
-  box-shadow:
-    inset 3px 3px 6px var(--neu-shadow-dark),
-    inset -3px -3px 6px var(--neu-shadow-light);
+  box-shadow: var(--shadow-inset);
 }
 
 .fab-label {
@@ -528,13 +620,39 @@ onBeforeUnmount(() => {
   opacity: 1 !important;
 }
 
-.pswp__button--save-button .pswp__icn {
+.pswp__button--report-button {
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+.pswp__button--save-button .pswp__icn,
+.pswp__button--report-button .pswp__icn {
   color: #fff;
   fill: none;
   opacity: 1;
 }
 
 .pswp__button--zoom {
+  display: none !important;
+}
+
+.pswp__nickname {
+  position: absolute;
+  right: 18px;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 10;
+  max-width: min(42%, 220px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  color: #f7f3e9;
+  text-align: right;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.pswp__nickname[hidden] {
   display: none !important;
 }
 </style>

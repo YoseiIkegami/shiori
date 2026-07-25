@@ -8,6 +8,7 @@
 import { addMonochromeGrain, applyPolaroidTone } from '@/lib/polaroidTone'
 import type { FilterMode } from '@/lib/filterMode'
 import { classicTheme } from '@/themes/classic'
+import type { DateFormat } from '@/types'
 
 export const POLAROID_WIDTH = classicTheme.frame.width
 export const POLAROID_HEIGHT = classicTheme.frame.height
@@ -19,7 +20,7 @@ export const CAPTION_BAND = POLAROID_HEIGHT - FRAME_MARGIN - PHOTO_HEIGHT
 
 const FRAME_COLOR = classicTheme.frame.color
 const INK_COLOR = classicTheme.frame.ink
-const FONT_FAMILY = '"Klee One", "Yomogi", cursive'
+const FONT_FAMILY = '"Klee One", "Hiragino Maru Gothic ProN", cursive'
 const BASE_FONT_SIZE = 48
 const MIN_FONT_SIZE = 28
 const TEXT_PAD_X = 72
@@ -31,12 +32,23 @@ const DATE_MARGIN = 22
 const DATE_FONT_FAMILY = '"DSEG7 Classic", monospace'
 const JPEG_QUALITY = 0.9
 
-/** Instant-camera style local date: `'26.7.17` (2-digit year, no zero-pad, no time). */
-export function formatCaptureStamp(at: Date = new Date()): string {
-  const y = String(at.getFullYear()).slice(-2)
+/** Instant-camera style local date stamp. Respects trip `date_format`. */
+export function formatCaptureStamp(
+  at: Date = new Date(),
+  dateFormat: DateFormat = 'YY.M.D',
+): string {
+  if (dateFormat === 'none') return ''
+  const y2 = String(at.getFullYear()).slice(-2)
+  const y4 = String(at.getFullYear())
   const m = at.getMonth() + 1
   const d = at.getDate()
-  return `'${y}.${m}.${d}`
+  if (dateFormat === 'YYYY.M.D') return `'${y4}.${m}.${d}`
+  if (dateFormat === 'YY.M.D HH:mm') {
+    const h = String(at.getHours()).padStart(2, '0')
+    const min = String(at.getMinutes()).padStart(2, '0')
+    return `'${y2}.${m}.${d} ${h}:${min}`
+  }
+  return `'${y2}.${m}.${d}`
 }
 
 async function ensureFontsReady(sizePx: number): Promise<void> {
@@ -188,6 +200,7 @@ export async function composePolaroid(
   commentText: string,
   filterMode: FilterMode = 'orange',
   capturedAt: Date = new Date(),
+  dateFormat: DateFormat = 'YY.M.D',
 ): Promise<Blob> {
   await ensureFontsReady(BASE_FONT_SIZE)
 
@@ -233,19 +246,61 @@ export async function composePolaroid(
     })
   }
 
-  // 6) Capture date+time — inside photo well (LED stamp look), not on the caption band.
-  drawCaptureStamp(
-    ctx,
-    formatCaptureStamp(capturedAt),
-    FRAME_MARGIN + PHOTO_WIDTH - DATE_MARGIN,
-    FRAME_MARGIN + PHOTO_HEIGHT - DATE_MARGIN,
-  )
+  // 6) Capture date — inside photo well (LED stamp look), not on the caption band.
+  const stamp = formatCaptureStamp(capturedAt, dateFormat)
+  if (stamp) {
+    drawCaptureStamp(
+      ctx,
+      stamp,
+      FRAME_MARGIN + PHOTO_WIDTH - DATE_MARGIN,
+      FRAME_MARGIN + PHOTO_HEIGHT - DATE_MARGIN,
+    )
+  }
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (b) => {
         if (b) resolve(b)
         else reject(new Error('ポラロイド合成 JPEG の生成に失敗しました'))
+      },
+      'image/jpeg',
+      JPEG_QUALITY,
+    )
+  })
+}
+
+/** Bake a nickname into the caption band (bottom-right) for Web Share only. */
+export async function bakeNicknameOntoPolaroid(
+  sourceBlob: Blob,
+  nickname: string,
+): Promise<Blob> {
+  const name = nickname.trim().slice(0, 12)
+  if (!name) return sourceBlob
+
+  await ensureFontsReady(32)
+  const img = await loadImageFromBlob(sourceBlob)
+  const canvas = document.createElement('canvas')
+  canvas.width = POLAROID_WIDTH
+  canvas.height = POLAROID_HEIGHT
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return sourceBlob
+
+  ctx.drawImage(img, 0, 0)
+  ctx.fillStyle = INK_COLOR
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'bottom'
+  ctx.font = `28px ${FONT_FAMILY}`
+  ctx.fillText(
+    name,
+    POLAROID_WIDTH - TEXT_PAD_X,
+    POLAROID_HEIGHT - 36,
+  )
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => {
+        if (b) resolve(b)
+        else reject(new Error('ニックネーム焼き込みに失敗しました'))
       },
       'image/jpeg',
       JPEG_QUALITY,

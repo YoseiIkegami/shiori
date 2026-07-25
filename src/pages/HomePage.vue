@@ -1,28 +1,47 @@
 <template>
   <main class="home flow-page">
-    <section class="hero" aria-label="SHIORI の紹介">
-      <div class="photo-pile" aria-hidden="true">
-        <div class="instant instant-a"><i /></div>
-        <div class="instant instant-b"><i /></div>
-        <div class="instant instant-c"><i /></div>
-      </div>
+    <section class="hero" :aria-label="t('home.howto.label')">
+      <HowToSlideshow />
     </section>
 
     <section class="intro">
-      <p class="brand">SHIORI</p>
-      <h1>届くまで、<br />開かない写真。</h1>
-      <p class="lead">集まったら、みんなで開く。</p>
+      <p class="brand display-type">{{ t('home.brand') }}</p>
+      <h1 class="display-type">{{ t('home.headline') }}</h1>
+      <p class="lead">{{ t('home.tagline') }}</p>
     </section>
 
     <div class="home-footer">
-      <router-link class="flow-btn primary" to="/create">旅をはじめる</router-link>
-      <p class="plan">{{ tripPlanPriceLine() }}</p>
+      <router-link class="flow-btn primary" to="/create">{{ t('home.cta') }}</router-link>
+      <p class="plan">{{ priceLine }}</p>
+      <nav class="legal-links" aria-label="legal">
+        <router-link to="/terms">{{ t('common.legal.terms') }}</router-link>
+        <span aria-hidden="true">·</span>
+        <router-link to="/privacy">{{ t('common.legal.privacy') }}</router-link>
+        <span aria-hidden="true">·</span>
+        <router-link to="/legal">{{ t('common.legal.tokusho') }}</router-link>
+      </nav>
+      <div class="lang">
+        <button type="button" class="lang-btn" :class="{ active: locale === 'ja' }" @click="setLocale('ja')">
+          {{ t('common.langJa') }}
+        </button>
+        <span aria-hidden="true">·</span>
+        <button type="button" class="lang-btn" :class="{ active: locale === 'en' }" @click="setLocale('en')">
+          {{ t('common.langEn') }}
+        </button>
+      </div>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import HowToSlideshow from '@/components/HowToSlideshow.vue'
+import { setLocale } from '@/i18n'
 import { tripPlanPriceLine } from '@/lib/tripPlan'
+
+const { t, locale } = useI18n()
+const priceLine = computed(() => tripPlanPriceLine('standard'))
 </script>
 
 <style scoped>
@@ -33,110 +52,104 @@ import { tripPlanPriceLine } from '@/lib/tripPlan'
 }
 
 .hero {
-  min-height: 38dvh;
-  padding: calc(24px + var(--safe-top)) 28px 16px;
+  padding: calc(16px + var(--safe-top)) 20px 8px;
   display: grid;
   place-items: center;
-  background: #e9e2d5;
+  background:
+    radial-gradient(120% 80% at 50% 0%, #f3ebe0 0%, transparent 55%),
+    linear-gradient(180deg, #ebe4d8 0%, var(--surface) 100%);
   overflow: hidden;
 }
 
-.photo-pile {
-  position: relative;
-  width: min(76vw, 300px);
-  height: 220px;
-}
-
-.instant {
-  position: absolute;
-  width: 154px;
-  height: 188px;
-  padding: 10px 10px 42px;
-  background: #fffdf8;
-  box-shadow: 0 16px 25px rgba(72, 54, 34, 0.18);
-}
-
-.instant i {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(145deg, #8ca0a2, #d7b997 52%, #66878d);
-}
-
-.instant-a {
-  left: 4px;
-  top: 36px;
-  transform: rotate(-13deg);
-}
-
-.instant-a i {
-  background: linear-gradient(155deg, #819b9e 0 30%, #e9d1ad 31% 58%, #587f82 59%);
-}
-
-.instant-b {
-  left: 73px;
-  top: 5px;
-  transform: rotate(7deg);
-}
-
-.instant-b i {
-  background: linear-gradient(145deg, #a9b9bd 0 34%, #6f8b81 35% 59%, #d7a980 60%);
-}
-
-.instant-c {
-  right: -3px;
-  top: 55px;
-  transform: rotate(16deg);
-}
-
-.instant-c i {
-  background: linear-gradient(135deg, #d9bd95 0 27%, #8aa2ad 28% 63%, #d8e1df 64%);
-}
-
 .intro {
-  padding: 22px 28px 8px;
+  padding: 4px 28px 0;
 }
 
 .brand {
-  margin: 0 0 13px;
-  font-size: 0.69rem;
-  font-weight: 700;
-  letter-spacing: 0.28em;
-  color: var(--accent);
+  margin: 0 0 10px;
+  font-size: clamp(1.7rem, 6.5vw, 2.2rem);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  color: var(--ink-brown);
 }
 
 h1 {
   margin: 0;
-  font-family: 'Klee One', serif;
-  font-size: clamp(1.8rem, 7vw, 2.35rem);
-  font-weight: 600;
-  line-height: 1.38;
-  letter-spacing: 0.02em;
+  font-size: clamp(1.15rem, 4.6vw, 1.4rem);
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0.03em;
   color: var(--ink-brown);
 }
 
 .lead {
-  margin: 14px 0 0;
+  margin: 8px 0 0;
   color: var(--text-muted);
-  font-size: 0.93rem;
-  line-height: 1.85;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
 }
 
 .home-footer {
-  margin-top: 24px;
-  padding: 0 20px calc(20px + var(--safe-bottom));
+  margin-top: auto;
+  padding: 20px 20px calc(20px + var(--safe-bottom));
 }
 
-.home-footer a {
+.home-footer > .flow-btn {
   display: grid;
   place-items: center;
   text-decoration: none;
 }
 
 .plan {
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   text-align: center;
   color: var(--text-muted);
   font-size: 0.76rem;
+}
+
+.legal-links {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.legal-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.legal-links span,
+.lang span {
+  color: #c4beb5;
+}
+
+.lang {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.72rem;
+}
+
+.lang-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lang-btn.active {
+  color: var(--ink-brown);
+  font-weight: 700;
 }
 </style>

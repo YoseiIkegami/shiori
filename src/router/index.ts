@@ -26,6 +26,21 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/terms',
+      name: 'terms',
+      component: () => import('@/pages/TermsPage.vue'),
+    },
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('@/pages/PrivacyPage.vue'),
+    },
+    {
+      path: '/legal',
+      name: 'legal',
+      component: () => import('@/pages/LegalPage.vue'),
+    },
+    {
       path: '/t/:tripId',
       name: 'trip',
       component: TripPage,

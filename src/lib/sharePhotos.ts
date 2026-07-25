@@ -3,6 +3,8 @@
  * ZIP download is intentionally out of scope.
  */
 
+import { bakeNicknameOntoPolaroid } from '@/lib/composePolaroid'
+
 const SHARE_CHUNK_SIZE = 5
 
 export function sanitizeTripName(tripName: string): string {
@@ -36,8 +38,13 @@ export async function blobFromUrl(imageUrl: string): Promise<Blob> {
 export async function fileFromUrl(
   imageUrl: string,
   filename: string,
+  nickname?: string | null,
 ): Promise<File> {
-  const blob = await blobFromUrl(imageUrl)
+  let blob = await blobFromUrl(imageUrl)
+  const name = nickname?.trim()
+  if (name) {
+    blob = await bakeNicknameOntoPolaroid(blob, name)
+  }
   const type = blob.type || 'image/jpeg'
   return new File([blob], filename, { type })
 }
@@ -74,9 +81,10 @@ export type ShareResult =
 export async function saveSinglePhoto(
   imageUrl: string,
   filename: string,
+  nickname?: string | null,
 ): Promise<ShareResult> {
   try {
-    const file = await fileFromUrl(imageUrl, filename)
+    const file = await fileFromUrl(imageUrl, filename, nickname)
     if (canShareFiles([file])) {
       try {
         await navigator.share({ files: [file] })
@@ -132,12 +140,12 @@ export async function sharePreparedFiles(files: File[]): Promise<ShareResult> {
 }
 
 export async function buildPhotoFiles(
-  photos: Array<{ url: string }>,
+  photos: Array<{ url: string; nickname?: string | null }>,
   tripName: string,
 ): Promise<File[]> {
   return Promise.all(
     photos.map((photo, index) =>
-      fileFromUrl(photo.url, photoFilename(tripName, index)),
+      fileFromUrl(photo.url, photoFilename(tripName, index), photo.nickname),
     ),
   )
 }
@@ -148,7 +156,7 @@ export async function buildPhotoFiles(
  * second tap (no extra network).
  */
 export async function saveAllPhotos(
-  photos: Array<{ url: string }>,
+  photos: Array<{ url: string; nickname?: string | null }>,
   tripName: string,
 ): Promise<ShareResult> {
   if (!photos.length) return { status: 'unsupported' }

@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 
   const session = event.data.object as Stripe.Checkout.Session
   const tripId = session.metadata?.trip_id
-  const orderType = session.metadata?.type ?? 'base'
+  const planId = session.metadata?.plan_id ?? 'standard'
 
   if (!tripId) {
     console.error('checkout.session.completed without trip_id')
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     stripe_session_id: session.id,
     amount: session.amount_total ?? 0,
     currency: session.currency ?? 'jpy',
-    type: orderType,
+    type: 'base',
   })
 
   if (orderError && (orderError as { code?: string }).code !== '23505') {
@@ -108,11 +108,19 @@ Deno.serve(async (req) => {
     return new Response('Failed to record order', { status: 500 })
   }
 
-  // Mark the trip paid and set its retention window (base = 7 days).
-  const expiresAt = new Date(Date.now() + RETENTION_DAYS_BASE * 24 * 60 * 60 * 1000)
+  // Retention: plus = unlimited (NULL); standard (and unknown) = 7 days.
+  const patch: Record<string, unknown> = { payment_status: 'paid' }
+  if (planId === 'plus') {
+    patch.expires_at = null
+  } else {
+    patch.expires_at = new Date(
+      Date.now() + RETENTION_DAYS_BASE * 24 * 60 * 60 * 1000,
+    ).toISOString()
+  }
+
   const { data: trip, error: updateError } = await supabase
     .from('trips')
-    .update({ payment_status: 'paid', expires_at: expiresAt.toISOString() })
+    .update(patch)
     .eq('id', tripId)
     .select('slug, organizer_token')
     .maybeSingle()

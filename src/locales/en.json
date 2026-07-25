@@ -1,0 +1,80 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy",
+    "legal": {
+      "terms": "Terms",
+      "privacy": "Privacy",
+      "tokusho": "Legal notice"
+    },
+    "langJa": "日本語",
+    "langEn": "English"
+  },
+  "home": {
+    "brand": "SHIORI",
+    "headline": "Rest while you travel. Open together when it ends.",
+    "tagline": "Photos that stay sealed until then.",
+    "cta": "Start a trip",
+    "priceLine": "{photos} shots · {days} days {price}",
+    "howto": {
+      "label": "How it works",
+      "slidesLabel": "Slides",
+      "slideN": "Slide {n}",
+      "shoot": {
+        "title": "Shoot",
+        "body": "Take photos during the trip.",
+        "caption": "This moment"
+      },
+      "seal": {
+        "title": "Seal",
+        "body": "Nobody sees them until the count is full.",
+        "caption": "Kept sealed"
+      },
+      "open": {
+        "title": "Open",
+        "body": "When ready, everyone opens together.",
+        "caption": "The reveal"
+      }
+    }
+  },
+  "create": {
+    "title": "Start a trip",
+    "stepName": "Choose a name",
+    "stepSettings": "Trip settings",
+    "nameLabel": "Trip name",
+    "nameHint": "3–30 characters, letters, numbers, hyphens",
+    "suggest": "Suggest",
+    "next": "Next",
+    "checking": "Checking name…",
+    "nameOk": "This name is available",
+    "planLabel": "Plan",
+    "commentRequired": "Require a caption",
+    "showNicknames": "Show photographer names",
+    "showDate": "Show dates",
+    "preparing": "Preparing…",
+    "submitFree": "Start for free",
+    "submitPaid": "Start for {price}",
+    "freeNote": "Deleted soon after you leave"
+  },
+  "plan": {
+    "free": {
+      "name": "FREE",
+      "summary": "3 shots · try it"
+    },
+    "standard": {
+      "name": "Standard",
+      "summary": "50 shots · 7 days"
+    },
+    "plus": {
+      "name": "Plus",
+      "summary": "500 shots · keeps forever"
+    }
+  },
+  "manage": {
+    "filmCount": "Film count",
+    "filmFixed": "{n} shots"
+  }
+}

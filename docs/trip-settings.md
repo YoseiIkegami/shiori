@@ -20,18 +20,15 @@
 | UI 文言 | DB カラム | デフォルト | 作成時 | 幹事変更 |
 |---|---|---|---|---|
 | 旅のなまえ | `slug` + `name` | — | 必須 | 表示名のみ |
-| フィルムの枚数 | `max_photos` | 50 | 可 | 可 |
-| おわりの時間 | `reveal_at` | NULL | 可 | 可 |
+| フィルムの枚数 | `max_photos` | 50 | 10〜100（10枚刻み） | 同 |
 | ひとことを必須にする | `comment_required` | true | 可 | 可 |
-| 撮った人の名前を表示 | `show_nicknames` | false | 可（UI 無効） | 可（準備中） |
-| 日付の表示 | `date_format` | `YY.M.D` | 固定 `YY.M.D` | 可 |
+| 撮った人の名前を表示 | `show_nicknames` | false | 可 | 可 |
+| 日付の表示 | `date_format` | `YY.M.D` | ON/OFF（ON=`YY.M.D`） | フォーマット選択可 |
 
-### 終了時刻
+### 終了時刻（`reveal_at`）
 
-- 未設定: 枚数上限のみで終了
-- 設定時: 枚数 **または** 時刻、先に達した方で解禁
-- UI: Vant DatePicker + TimePicker（下からシート）
-
+UI からは外した。複合解禁の DB / Edge ロジックは残る（既存 trip・手動終了用）。
+新規作成は常に `reveal_at = null`（枚数のみ）。
 ### 日付フォーマット
 
 許容値:

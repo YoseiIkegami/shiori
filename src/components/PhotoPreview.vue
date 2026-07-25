@@ -5,7 +5,12 @@
         <img :src="displayUrl" alt="プレビュー" />
         <time class="photo-date">{{ stampText }}</time>
       </div>
-      <button type="button" class="caption handwriting" :class="{ placeholder: !localComment.trim() }" @click="openSheet">
+      <button
+        type="button"
+        class="caption"
+        :class="{ handwriting: !!localComment.trim(), placeholder: !localComment.trim() }"
+        @click="openSheet"
+      >
         {{ localComment.trim() || 'タップしてコメントを入力' }}
       </button>
     </div>
@@ -54,7 +59,7 @@
       close-on-click-overlay
       :style="{ padding: '20px 16px calc(20px + env(safe-area-inset-bottom))' }"
     >
-      <p class="sheet-title handwriting">ひとことメッセージ</p>
+      <p class="sheet-title">ひとことメッセージ</p>
       <p class="sheet-hint">30文字まで</p>
       <textarea
         ref="textareaEl"
@@ -69,7 +74,7 @@
         <span class="spacer"></span>
         <span class="counter">{{ localComment.length }}/30</span>
       </div>
-      <van-button block round type="primary" color="#e9a154" @click="onSheetDone">
+      <van-button block round type="primary" color="#bd5825" @click="onSheetDone">
         入力完了
       </van-button>
     </van-popup>
@@ -82,6 +87,7 @@ import { showToast } from 'vant'
 import { formatCaptureStamp } from '@/lib/composePolaroid'
 import { nextFilterMode, type FilterMode } from '@/lib/filterMode'
 import { gradePhotoBlob } from '@/lib/polaroidTone'
+import type { DateFormat } from '@/types'
 
 const props = withDefaults(
   defineProps<{
@@ -90,8 +96,9 @@ const props = withDefaults(
     filterMode: FilterMode
     capturedAt?: Date
     commentRequired?: boolean
+    dateFormat?: DateFormat
   }>(),
-  { commentRequired: true },
+  { commentRequired: true, dateFormat: 'YY.M.D' },
 )
 
 const emit = defineEmits<{
@@ -112,7 +119,9 @@ let gradeSeq = 0
 const canProceed = computed(
   () => !props.commentRequired || localComment.value.trim().length > 0,
 )
-const stampText = computed(() => formatCaptureStamp(props.capturedAt ?? new Date()))
+const stampText = computed(() =>
+  formatCaptureStamp(props.capturedAt ?? new Date(), props.dateFormat),
+)
 const filterAriaLabel = computed(() => {
   if (props.filterMode === 'orange') return 'フィルター: オレンジ'
   if (props.filterMode === 'blue') return 'フィルター: ブルー'

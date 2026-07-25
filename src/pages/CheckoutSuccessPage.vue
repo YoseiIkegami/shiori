@@ -6,7 +6,6 @@
 
     <template v-else-if="result">
       <div class="success-heading">
-        <span v-if="paid" class="check" aria-hidden="true">✓</span>
         <h1>{{ paid ? '旅のリンクができました' : '決済を確認しています' }}</h1>
       </div>
 
@@ -100,6 +99,26 @@ async function shareTrip() {
 }
 
 onMounted(async () => {
+  const free = String(route.query.free ?? '') === '1'
+  const freeSlug = String(route.query.slug ?? '')
+  const freeToken = String(route.query.token ?? '')
+
+  if (free && freeSlug && freeToken) {
+    try {
+      sessionStorage.setItem(`shiori.free.${freeSlug}`, freeToken)
+    } catch {
+      /* ignore */
+    }
+    result.value = {
+      slug: freeSlug,
+      name: freeSlug,
+      organizer_token: freeToken,
+      payment_status: 'paid',
+    }
+    loading.value = false
+    return
+  }
+
   const sessionId = String(route.query.session_id ?? '')
   if (!sessionId) {
     error.value = 'セッションが見つかりません'
@@ -131,24 +150,15 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   gap: 16px;
-}
-
-.check {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: #e8f0e8;
-  color: #547b5e;
-  font-size: 1.35rem;
+  padding-top: 8px;
 }
 
 h1 {
   margin: 0;
-  font-family: 'Klee One', serif;
-  font-size: 1.55rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--ink-brown);
 }
 
@@ -160,8 +170,9 @@ h1 {
 
 .trip-name {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 1.45rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--ink-brown);
   word-break: break-all;
 }

@@ -29,7 +29,7 @@ const json = (body: unknown, status: number, headers: Record<string, string>) =>
   })
 
 const TRIP_FIELDS =
-  'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, ' +
+  'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
   'show_nicknames, comment_required, date_format, expires_at, payment_status, organizer_token'
 
 function publicTrip(trip: Record<string, unknown>) {
@@ -104,7 +104,12 @@ Deno.serve(async (req) => {
 
     if (typeof patch.name === 'string' && patch.name.trim()) update.name = patch.name.trim()
     if (patch.max_photos !== undefined && Number.isFinite(Number(patch.max_photos))) {
-      update.max_photos = Math.max(1, Math.min(500, Math.floor(Number(patch.max_photos))))
+      const planCap =
+        trip.plan_id === 'free' ? 3 : trip.plan_id === 'plus' ? 500 : 50
+      update.max_photos = Math.max(
+        1,
+        Math.min(planCap, Math.floor(Number(patch.max_photos))),
+      )
     }
     if (patch.reveal_at === null) update.reveal_at = null
     else if (typeof patch.reveal_at === 'string' && patch.reveal_at) update.reveal_at = patch.reveal_at

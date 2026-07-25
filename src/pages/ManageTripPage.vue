@@ -16,7 +16,7 @@
             {{ trip.photos_count }} / {{ trip.max_photos }} 枚
             <span v-if="trip.is_revealed" class="badge">解禁済み</span>
           </p>
-          <button type="button" class="flow-btn primary share-btn" @click="shareTrip">共有する</button>
+          <button type="button" class="flow-btn share-btn" @click="shareTrip">共有する</button>
         </div>
         <div class="progress" aria-hidden="true">
           <span class="progress-fill" :style="{ width: `${progressPct}%` }" />
@@ -45,25 +45,19 @@
           <input v-model="form.name" class="flow-input" type="text" maxlength="60" />
         </label>
 
-        <label class="field">
-          <span class="flow-label">フィルムの枚数</span>
-          <input
-            v-model.number="form.max_photos"
-            class="flow-input"
-            type="number"
-            min="1"
-            max="500"
-          />
-        </label>
-
-        <label class="field">
-          <span class="flow-label">おわりの時間（任意）</span>
-          <RevealAtField v-model="revealAt" />
-        </label>
+        <div class="field">
+          <span class="flow-label">{{ tFilmLabel }}</span>
+          <p class="film-fixed">{{ trip.max_photos }} 枚</p>
+        </div>
 
         <div class="field switch-row">
           <span class="flow-label">ひとことを必須にする</span>
-          <van-switch v-model="form.comment_required" size="22px" active-color="#d96f34" />
+          <van-switch v-model="form.comment_required" size="22px" active-color="#bd5825" />
+        </div>
+
+        <div class="field switch-row">
+          <span class="flow-label">撮った人の名前を表示</span>
+          <van-switch v-model="form.show_nicknames" size="22px" active-color="#bd5825" />
         </div>
 
         <label class="field">
@@ -81,8 +75,7 @@
 
       <section v-if="!trip.is_revealed" class="danger-zone">
         <hr class="flow-divider" />
-        <h2 class="flow-section-title danger-title">危険な操作</h2>
-        <p class="danger-note">この操作は取り消せません</p>
+        <h2 class="flow-section-title">終了</h2>
         <button class="end-btn" type="button" :disabled="ending" @click="onEnd">
           {{ ending ? '処理中…' : '旅を終了して写真を開く' }}
         </button>
@@ -105,7 +98,6 @@ import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import QrCode from '@/components/QrCode.vue'
-import RevealAtField from '@/components/RevealAtField.vue'
 import { manageTripEnd, manageTripGet, manageTripUpdate, type ManageTrip } from '@/lib/tripApi'
 import type { DateFormat } from '@/types'
 
@@ -118,7 +110,6 @@ const trip = ref<ManageTrip | null>(null)
 const saving = ref(false)
 const ending = ref(false)
 const saveMsg = ref<string | null>(null)
-const revealAt = ref<Date | null>(null)
 const formatOpen = ref(false)
 
 const token = computed(() => String(route.query.token ?? ''))
@@ -127,8 +118,11 @@ const form = reactive({
   name: '',
   max_photos: 50,
   comment_required: true,
+  show_nicknames: false,
   date_format: 'YY.M.D' as DateFormat,
 })
+
+const tFilmLabel = 'フィルムの枚数'
 
 const formatActions = [
   { name: 'YY.M.D', value: 'YY.M.D' },
@@ -157,8 +151,8 @@ function syncForm(t: ManageTrip) {
   form.name = t.name
   form.max_photos = t.max_photos
   form.comment_required = t.comment_required !== false
+  form.show_nicknames = t.show_nicknames === true
   form.date_format = (t.date_format as DateFormat) || 'YY.M.D'
-  revealAt.value = t.reveal_at ? new Date(t.reveal_at) : null
 }
 
 function onFormatSelect(action: { value: string }) {
@@ -219,8 +213,8 @@ async function onSave() {
     const updated = await manageTripUpdate(props.slug, token.value, {
       name: form.name,
       max_photos: form.max_photos,
-      reveal_at: revealAt.value ? revealAt.value.toISOString() : null,
       comment_required: form.comment_required,
+      show_nicknames: form.show_nicknames,
       date_format: form.date_format,
     })
     trip.value = updated
@@ -265,9 +259,10 @@ onMounted(() => {
 <style scoped>
 .head h1 {
   margin: 0;
-  font-family: 'Klee One', serif;
-  font-size: 1.55rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--ink-brown);
 }
 
@@ -323,6 +318,14 @@ onMounted(() => {
   min-width: 112px;
   min-height: 44px;
   padding: 0 16px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.share-btn:active:not(:disabled) {
+  background: var(--surface-deep);
 }
 
 .share-meta {
@@ -388,6 +391,14 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.film-fixed {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink-brown);
+  font-variant-numeric: tabular-nums;
+}
+
 .msg {
   margin: 0;
   font-size: 0.78rem;
@@ -395,24 +406,14 @@ onMounted(() => {
   text-align: center;
 }
 
-.danger-title {
-  color: #c44;
-}
-
-.danger-note {
-  margin: -8px 0 8px;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-}
-
 .end-btn {
   width: 100%;
   min-height: 44px;
   border: 0;
   background: transparent;
-  color: #c44;
+  color: var(--text-muted);
   font: inherit;
-  font-weight: 700;
+  font-weight: 500;
   cursor: pointer;
 }
 

@@ -10,6 +10,7 @@ export type Trip = {
   is_revealed: boolean | null
   photos_count: number
   max_photos: number
+  plan_id?: 'free' | 'standard' | 'plus'
   show_nicknames?: boolean
   comment_required?: boolean
   date_format?: DateFormat
@@ -36,6 +37,8 @@ export type RevealedPhoto = {
   rotation: number | null
   created_at: string
   url: string
+  nickname?: string | null
+  member_id?: string | null
 }
 
 export type ShootState =

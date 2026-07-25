@@ -1,4 +1,4 @@
-import { normalizeSlug, SLUG_MAX } from '@/lib/reservedSlugs'
+import { normalizeSlug, SLUG_MAX, validateSlugFormat } from '@/lib/reservedSlugs'
 
 const PREFIXES = [
   'kaze',
@@ -59,4 +59,29 @@ export function withCollisionSuffix(base: string): string {
   if (room < 3) return generateSlugCandidate()
   const trimmed = base.slice(0, room).replace(/-$/, '')
   return normalizeSlug(`${trimmed}${suffix}`)
+}
+
+/** Pick available slug candidates, skipping taken / reserved / avoid list. */
+export async function pickAvailableSlugs(
+  count: number,
+  isTaken: (slug: string) => Promise<boolean>,
+  avoid: Iterable<string> = [],
+): Promise<string[]> {
+  const blocked = new Set(
+    [...avoid].map((s) => normalizeSlug(s)).filter(Boolean),
+  )
+  const out: string[] = []
+  const seen = new Set<string>()
+  const seed = [...blocked][0]
+
+  for (let i = 0; i < 24 && out.length < count; i++) {
+    let candidate =
+      seed && i % 2 === 0 ? withCollisionSuffix(seed) : generateSlugCandidate()
+    if (seen.has(candidate) || blocked.has(candidate)) continue
+    seen.add(candidate)
+    if (validateSlugFormat(candidate)) continue
+    if (await isTaken(candidate)) continue
+    out.push(candidate)
+  }
+  return out
 }

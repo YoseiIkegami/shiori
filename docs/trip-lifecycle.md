@@ -52,7 +52,7 @@ stripe-webhook（checkout.session.completed）
 
 - 新規有料 trip: 決済完了から **7 日** で `expires_at` 設定
 - 既存 trip（`summer-boardgames` / `test`）: マイグレーションで `paid` + `expires_at = NULL`（削除対象外）
-- 自動削除バッチは **Phase 2c 未実装**
+- 自動削除バッチは **Phase 2c 実装済み**（`purge-expired-trips`）。`expires_at IS NULL` は対象外
 
 ## slug（旅のなまえ）
 

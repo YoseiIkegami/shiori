@@ -2,9 +2,9 @@
   --surface: #f8f7f4;
   --surface-deep: #efede8;
   --text: #2e3437;
-  --text-muted: #71777a;
-  --accent: #d96f34;
-  --accent-pressed: #bd5825;
+  --text-muted: #63696c;
+  --accent: #bd5825;
+  --accent-pressed: #9e4a1f;
   --accent-soft: #f3d0b6;
   --filter-orange: #d6602a;
   --filter-blue: #5b7a9e;
@@ -14,11 +14,16 @@
   --shadow-raised-sm: 0 2px 6px rgba(48, 42, 34, 0.06);
   --shadow-raised-md: 0 8px 24px rgba(48, 42, 34, 0.09);
   --shadow-raised-lg: 0 18px 48px rgba(48, 42, 34, 0.13);
+  --shadow-inset: inset 0 2px 4px rgba(48, 42, 34, 0.1);
+  --shadow-inset-deep: inset 0 3px 6px rgba(48, 42, 34, 0.14);
+  --font-ui: 'BIZ UDPGothic', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  --font-display: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --font-hand: 'Klee One', 'Hiragino Maru Gothic ProN', cursive;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
-  font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-family: var(--font-ui);
   color: var(--text);
   line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
@@ -51,12 +56,16 @@ body {
 }
 
 .handwriting {
-  font-family: 'Klee One', 'Yomogi', cursive;
+  font-family: var(--font-hand);
+}
+
+.display-type {
+  font-family: var(--font-display);
 }
 
 /* Numbers need to stay legible — do NOT use the handwriting face here. */
 .numeric {
-  font-family: 'Zen Kaku Gothic New', sans-serif;
+  font-family: var(--font-ui);
   font-weight: 900;
   font-feature-settings: 'tnum' 1;
 }
@@ -184,6 +193,16 @@ body {
   font: inherit;
   color: var(--text);
   outline: none;
+}
+
+.flow-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2371777a' d='M1.1 1.2 6 6.1l4.9-4.9 1.1 1.1L6 8.3 0 2.3z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  padding-right: 40px;
+  cursor: pointer;
 }
 
 .flow-btn {

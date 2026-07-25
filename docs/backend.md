@@ -7,7 +7,9 @@
 | `create-trip-checkout` | anon invoke | trip 作成・Checkout・決済結果 |
 | `stripe-webhook` | Stripe 署名 | 決済完了処理 |
 | `manage-trip` | `organizer_token` | 幹事 get / update / end |
-| `reveal-photos` | anon invoke | 解禁後写真一覧 + 署名 URL |
+| `reveal-photos` | anon invoke | 解禁後写真一覧 + 署名 URL（nickname / is_hidden 除外） |
+| `report-photo` | anon invoke | 通報 → `is_hidden=true` |
+| `purge-expired-trips` | `x-cron-secret`（任意） | 期限切れ trip の Storage + DB 削除 |
 
 デプロイ:
 
@@ -16,8 +18,9 @@ npx supabase functions deploy create-trip-checkout
 npx supabase functions deploy stripe-webhook
 npx supabase functions deploy manage-trip
 npx supabase functions deploy reveal-photos
+npx supabase functions deploy report-photo
+npx supabase functions deploy purge-expired-trips
 ```
-
 ## create-trip-checkout
 
 **POST** body 例（発行）:

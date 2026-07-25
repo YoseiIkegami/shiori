@@ -36,7 +36,8 @@
 | `storage_path` | text | `{trip_id}/{uuid}.jpg` |
 | `comment` | text | 最大 30 文字 |
 | `rotation` | float | ボード表示用（画像未焼き込み） |
-| `member_id` | uuid? | FK → members（2b） |
+| `member_id` | uuid? | FK → members |
+| `is_hidden` | boolean | 通報後に true（reveal から除外） |
 | `created_at` | timestamptz | |
 
 合成済み JPEG: **1200×1800** 固定。

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 
-// Keep in sync with src/lib/reservedSlugs.ts (client-side list).
+// Keep in sync with src/lib/reservedSlugs.ts and src/lib/tripPlan.ts
 const RESERVED_SLUGS = new Set([
   'create',
   'manage',
@@ -18,10 +18,18 @@ const RESERVED_SLUGS = new Set([
 
 const SLUG_RE = /^[a-z0-9-]{3,30}$/
 const DATE_FORMATS = new Set(['YY.M.D', 'YYYY.M.D', 'YY.M.D HH:mm', 'none'])
-// Base price. Localization (per-country currency) is a follow-up; JPY default for now.
-const BASE_CURRENCY = (Deno.env.get('STRIPE_BASE_CURRENCY') ?? 'jpy').toLowerCase()
-const BASE_AMOUNT = Number(Deno.env.get('STRIPE_BASE_AMOUNT') ?? '150')
-const RETENTION_DAYS_BASE = 7
+
+type PlanId = 'free' | 'standard' | 'plus'
+type Currency = 'jpy' | 'usd'
+
+const PLANS: Record<
+  PlanId,
+  { maxPhotos: number; retentionDays: number | null; freeTtlHours?: number; amounts: Record<Currency, number> }
+> = {
+  free: { maxPhotos: 3, retentionDays: null, freeTtlHours: 2, amounts: { jpy: 0, usd: 0 } },
+  standard: { maxPhotos: 50, retentionDays: 7, amounts: { jpy: 150, usd: 100 } },
+  plus: { maxPhotos: 500, retentionDays: null, amounts: { jpy: 750, usd: 500 } },
+}
 
 const corsHeaders = (origin: string | null) => {
   const allowed = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
@@ -40,11 +48,7 @@ const corsHeaders = (origin: string | null) => {
   }
 }
 
-const json = (
-  body: unknown,
-  status: number,
-  headers: Record<string, string>,
-) =>
+const json = (body: unknown, status: number, headers: Record<string, string>) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { ...headers, 'Content-Type': 'application/json' },
@@ -56,8 +60,16 @@ function normalizeSlug(raw: unknown): string {
 
 function slugError(slug: string): string | null {
   if (!SLUG_RE.test(slug)) return '英数字とハイフンで 3〜30文字'
-  if (RESERVED_SLUGS.has(slug)) return '英数字とハイフンで 3〜30文字'
+  if (RESERVED_SLUGS.has(slug)) return 'この名前は使えません'
   return null
+}
+
+function parsePlanId(raw: unknown): PlanId {
+  return raw === 'free' || raw === 'plus' ? raw : 'standard'
+}
+
+function parseCurrency(raw: unknown): Currency {
+  return String(raw ?? '').toLowerCase() === 'usd' ? 'usd' : 'jpy'
 }
 
 Deno.serve(async (req) => {
@@ -69,15 +81,11 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
-  if (!supabaseUrl || !serviceRoleKey || !stripeKey) {
+  if (!supabaseUrl || !serviceRoleKey) {
     return json({ error: 'Server misconfigured' }, 500, headers)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
-  const stripe = new Stripe(stripeKey, {
-    apiVersion: '2024-06-20',
-    httpClient: Stripe.createFetchHttpClient(),
-  })
 
   let body: Record<string, unknown>
   try {
@@ -88,10 +96,12 @@ Deno.serve(async (req) => {
 
   const action = (body.action as string) ?? 'create'
 
-  // -------------------------------------------------------------------------
-  // result: success page looks up its trip by Stripe session id.
-  // -------------------------------------------------------------------------
   if (action === 'result') {
+    if (!stripeKey) return json({ error: 'Server misconfigured' }, 500, headers)
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: '2024-06-20',
+      httpClient: Stripe.createFetchHttpClient(),
+    })
     const sessionId = body.session_id as string | undefined
     if (!sessionId) return json({ error: 'session_id is required' }, 400, headers)
 
@@ -106,13 +116,17 @@ Deno.serve(async (req) => {
     const tripId = session.metadata?.trip_id
     if (!tripId) return json({ error: 'Session not linked to a trip' }, 404, headers)
 
-    // Fallback promote in case the webhook is delayed.
     if (session.payment_status === 'paid') {
-      await supabase
-        .from('trips')
-        .update({ payment_status: 'paid' })
-        .eq('id', tripId)
-        .neq('payment_status', 'paid')
+      const planId = parsePlanId(session.metadata?.plan_id)
+      const plan = PLANS[planId]
+      const patch: Record<string, unknown> = { payment_status: 'paid' }
+      if (plan.retentionDays == null) patch.expires_at = null
+      else {
+        patch.expires_at = new Date(
+          Date.now() + plan.retentionDays * 24 * 60 * 60 * 1000,
+        ).toISOString()
+      }
+      await supabase.from('trips').update(patch).eq('id', tripId).neq('payment_status', 'paid')
     }
 
     const { data: trip, error } = await supabase
@@ -135,9 +149,23 @@ Deno.serve(async (req) => {
     )
   }
 
-  // -------------------------------------------------------------------------
-  // create: validate slug, insert pending trip, open a Checkout Session.
-  // -------------------------------------------------------------------------
+  // delete free demo (organizer token)
+  if (action === 'delete_free') {
+    const slug = normalizeSlug(body.slug)
+    const token = String(body.token ?? '')
+    if (!slug || !token) return json({ error: 'slug and token are required' }, 400, headers)
+    const { data: trip, error } = await supabase
+      .from('trips')
+      .select('id, plan_id, organizer_token')
+      .eq('slug', slug)
+      .maybeSingle()
+    if (error || !trip) return json({ error: 'Trip not found' }, 404, headers)
+    if (trip.organizer_token !== token) return json({ error: 'Invalid token' }, 403, headers)
+    if (trip.plan_id !== 'free') return json({ error: 'Not a free trip' }, 400, headers)
+    await supabase.from('trips').delete().eq('id', trip.id)
+    return json({ ok: true }, 200, headers)
+  }
+
   const slug = normalizeSlug(body.slug ?? body.title)
   const slugErr = slugError(slug)
   if (slugErr) return json({ error: slugErr, field: 'slug' }, 400, headers)
@@ -153,23 +181,72 @@ Deno.serve(async (req) => {
   }
   if (existing) return json({ error: 'この名前はすでに使われています', field: 'slug' }, 409, headers)
 
+  const planId = parsePlanId(body.plan_id)
+  const currency = parseCurrency(body.currency)
+  const plan = PLANS[planId]
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : slug
-  const maxPhotos = Number.isFinite(Number(body.max_photos))
-    ? Math.max(1, Math.min(500, Math.floor(Number(body.max_photos))))
-    : 50
-  const revealAt =
-    typeof body.reveal_at === 'string' && body.reveal_at ? body.reveal_at : null
   const commentRequired = body.comment_required !== false
   const showNicknames = body.show_nicknames === true
   const dateFormat = DATE_FORMATS.has(String(body.date_format))
     ? String(body.date_format)
     : 'YY.M.D'
 
+  if (planId === 'free') {
+    const ttlHours = plan.freeTtlHours ?? 2
+    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString()
+    const { data: trip, error: insertError } = await supabase
+      .from('trips')
+      .insert({
+        slug,
+        name,
+        max_photos: plan.maxPhotos,
+        plan_id: planId,
+        reveal_at: null,
+        comment_required: commentRequired,
+        show_nicknames: showNicknames,
+        date_format: dateFormat,
+        payment_status: 'paid',
+        expires_at: expiresAt,
+      })
+      .select('id, slug, organizer_token')
+      .single()
+
+    if (insertError) {
+      if ((insertError as { code?: string }).code === '23505') {
+        return json({ error: 'この名前はすでに使われています', field: 'slug' }, 409, headers)
+      }
+      console.error('trip insert error', insertError)
+      return json({ error: 'Failed to create trip' }, 500, headers)
+    }
+
+    const origin = (body.origin as string) || req.headers.get('Origin') || Deno.env.get('APP_ORIGIN') || ''
+    const successUrl = `${origin.replace(/\/$/, '')}/create/success?free=1&slug=${encodeURIComponent(trip.slug)}&token=${encodeURIComponent(trip.organizer_token)}`
+    return json(
+      {
+        url: successUrl,
+        trip_id: trip.id,
+        slug: trip.slug,
+        organizer_token: trip.organizer_token,
+        plan_id: planId,
+        free: true,
+      },
+      200,
+      headers,
+    )
+  }
+
+  if (!stripeKey) return json({ error: 'Server misconfigured' }, 500, headers)
+  const stripe = new Stripe(stripeKey, {
+    apiVersion: '2024-06-20',
+    httpClient: Stripe.createFetchHttpClient(),
+  })
+
   const insertPayload = {
     slug,
     name,
-    max_photos: maxPhotos,
-    reveal_at: revealAt,
+    max_photos: plan.maxPhotos,
+    plan_id: planId,
+    reveal_at: null,
     comment_required: commentRequired,
     show_nicknames: showNicknames,
     date_format: dateFormat,
@@ -183,7 +260,6 @@ Deno.serve(async (req) => {
     .single()
 
   if (insertError) {
-    // Unique violation → slug was taken between the check and the insert (race).
     if ((insertError as { code?: string }).code === '23505') {
       return json({ error: 'この名前はすでに使われています', field: 'slug' }, 409, headers)
     }
@@ -199,26 +275,29 @@ Deno.serve(async (req) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      // Wallet methods (Apple Pay / Google Pay) surface automatically under 'card'.
       line_items: [
         {
           quantity: 1,
           price_data: {
-            currency: BASE_CURRENCY,
-            unit_amount: BASE_AMOUNT,
-            product_data: { name: `SHIORI: ${name}` },
+            currency,
+            unit_amount: plan.amounts[currency],
+            product_data: { name: `SHIORI ${planId}: ${name}` },
           },
         },
       ],
-      metadata: { trip_id: trip.id, slug: trip.slug, type: 'base' },
+      metadata: {
+        trip_id: trip.id,
+        slug: trip.slug,
+        type: planId,
+        plan_id: planId,
+      },
       success_url: successUrl,
       cancel_url: cancelUrl,
     })
 
-    return json({ url: session.url, trip_id: trip.id, slug: trip.slug }, 200, headers)
+    return json({ url: session.url, trip_id: trip.id, slug: trip.slug, plan_id: planId }, 200, headers)
   } catch (e) {
     console.error('checkout session error', e)
-    // The pending trip is left in place; it simply never becomes paid.
     return json({ error: 'Failed to start checkout' }, 500, headers)
   }
 })

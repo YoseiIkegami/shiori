@@ -23,7 +23,7 @@
           block
           round
           type="primary"
-          color="#e9a154"
+          color="#bd5825"
           :loading="sending"
           @click="emit('submit')"
         >

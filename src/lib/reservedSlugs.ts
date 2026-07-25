@@ -19,8 +19,11 @@ export const SLUG_MIN = 3
 export const SLUG_MAX = 30
 export const SLUG_RE = /^[a-z0-9-]{3,30}$/
 
-/** Format / reserved-word error. */
+/** Format error. */
 export const SLUG_FORMAT_MESSAGE = '英数字とハイフンで 3〜30文字'
+
+/** Reserved-word error. */
+export const SLUG_RESERVED_MESSAGE = 'この名前は使えません'
 
 /** Duplicate slug error. */
 export const SLUG_TAKEN_MESSAGE = 'この名前はすでに使われています'
@@ -40,6 +43,7 @@ export function isReservedSlug(slug: string): boolean {
 export function validateSlugFormat(raw: string): string | null {
   const slug = normalizeSlug(raw)
   if (!slug) return null
-  if (!SLUG_RE.test(slug) || isReservedSlug(slug)) return SLUG_FORMAT_MESSAGE
+  if (!SLUG_RE.test(slug)) return SLUG_FORMAT_MESSAGE
+  if (isReservedSlug(slug)) return SLUG_RESERVED_MESSAGE
   return null
 }

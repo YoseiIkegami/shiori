@@ -5,15 +5,15 @@
         v-if="step === 2"
         type="button"
         class="back"
-        aria-label="戻る"
+        :aria-label="t('common.back')"
         @click="step = 1"
       >
         ←
       </button>
-      <router-link v-else class="back" to="/" aria-label="戻る">←</router-link>
+      <router-link v-else class="back" to="/" :aria-label="t('common.back')">←</router-link>
       <div class="head-copy">
-        <h1>旅をはじめる</h1>
-        <p>{{ step === 1 ? '旅のなまえを決めよう' : '必要なら設定を変えよう' }}</p>
+        <h1>{{ t('create.title') }}</h1>
+        <p v-if="step === 1">{{ t('create.stepName') }}</p>
       </div>
       <span class="flow-step">{{ step }} / 2</span>
     </header>
@@ -21,7 +21,7 @@
     <form class="form" @submit.prevent="onSubmit">
       <section v-if="step === 1" class="step">
         <label class="field">
-          <span class="flow-label">旅のなまえ</span>
+          <span class="flow-label">{{ t('create.nameLabel') }}</span>
           <div class="title-row">
             <input
               v-model="titleInput"
@@ -41,23 +41,31 @@
               :disabled="generating"
               @click="onGenerate"
             >
-              提案
+              {{ t('create.suggest') }}
             </button>
           </div>
         </label>
 
-        <p v-if="nameFocused && !normalized" class="hint">英数字とハイフンで 3〜30文字</p>
+        <p v-if="nameFocused && !normalized" class="hint">{{ t('create.nameHint') }}</p>
 
-        <p
-          v-if="statusKind"
-          class="status"
-          :class="statusKind"
-          role="status"
-        >
-          <span v-if="statusKind === 'checking'" class="spinner" aria-hidden="true" />
-          <span v-else-if="statusKind === 'ok'" aria-hidden="true">✓</span>
-          {{ statusText }}
-        </p>
+        <div v-if="statusKind" class="status-block">
+          <p class="status" :class="statusKind" role="status">
+            <span v-if="statusKind === 'checking'" class="spinner" aria-hidden="true" />
+            <span v-else-if="statusKind === 'ok'" aria-hidden="true">✓</span>
+            {{ statusText }}
+          </p>
+          <div v-if="statusKind === 'err' && altSlugs.length" class="alts">
+            <button
+              v-for="alt in altSlugs"
+              :key="alt"
+              type="button"
+              class="alt-chip"
+              @click="applyAlt(alt)"
+            >
+              {{ alt }}
+            </button>
+          </div>
+        </div>
 
         <button
           type="button"
@@ -65,82 +73,96 @@
           :disabled="!slugOk"
           @click="step = 2"
         >
-          {{ nextLabel }}
+          {{ t('create.next') }}
         </button>
-
-        <p class="foot-note">あとから表示名は変更できます</p>
       </section>
 
       <section v-else class="step">
-        <p class="chosen-name">{{ normalized }}</p>
+        <p class="chosen-name display-type">{{ normalized }}</p>
 
-        <div class="settings-head">
-          <h2 class="flow-section-title">旅の設定</h2>
-          <p class="settings-lead">おすすめのままではじめられます</p>
-        </div>
+        <h2 class="flow-section-title">{{ t('create.stepSettings') }}</h2>
 
-        <label class="field">
-          <span class="flow-label">
-            フィルムの枚数
-            <span v-if="maxPhotos === 50" class="rec">（おすすめ）</span>
-          </span>
-          <input
-            v-model.number="maxPhotos"
-            class="flow-input"
-            type="number"
-            min="1"
-            max="500"
-          />
-        </label>
-
-        <label class="field">
-          <span class="flow-label">おわりの時間（任意）</span>
-          <RevealAtField v-model="revealAt" recommended-when-empty />
-        </label>
-
-        <div class="field switch-row">
-          <span class="flow-label">
-            ひとことを必須にする
-            <span v-if="commentRequired" class="rec">（おすすめ）</span>
-          </span>
-          <van-switch v-model="commentRequired" size="22px" active-color="#d96f34" />
+        <div class="field">
+          <span class="flow-label">{{ t('create.planLabel') }}</span>
+          <div class="plan-cards" role="radiogroup" :aria-label="t('create.planLabel')">
+            <button
+              v-for="id in planIds"
+              :key="id"
+              type="button"
+              role="radio"
+              class="plan-card"
+              :class="{ selected: planId === id }"
+              :aria-checked="planId === id"
+              @click="planId = id"
+            >
+              <span class="plan-name">{{ t(`plan.${id}.name`) }}</span>
+              <span class="plan-summary">{{ t(`plan.${id}.summary`) }}</span>
+              <span class="plan-price">{{ planPriceLabel(id) }}</span>
+            </button>
+          </div>
+          <p v-if="planId === 'free'" class="hint">{{ t('create.freeNote') }}</p>
         </div>
 
         <div class="field switch-row">
-          <span class="flow-label">
-            日付を表示する
-            <span v-if="showDate" class="rec">（おすすめ）</span>
-          </span>
-          <van-switch v-model="showDate" size="22px" active-color="#d96f34" />
+          <span class="flow-label">{{ t('create.commentRequired') }}</span>
+          <van-switch v-model="commentRequired" size="22px" active-color="#bd5825" />
+        </div>
+
+        <div class="field switch-row">
+          <span class="flow-label">{{ t('create.showNicknames') }}</span>
+          <van-switch v-model="showNicknames" size="22px" active-color="#bd5825" />
+        </div>
+
+        <div class="field switch-row">
+          <span class="flow-label">{{ t('create.showDate') }}</span>
+          <van-switch v-model="showDate" size="22px" active-color="#bd5825" />
         </div>
 
         <p v-if="submitError" class="err">{{ submitError }}</p>
-        <p class="includes">{{ tripIncludesLine(maxPhotos) }}</p>
         <button class="flow-btn primary" type="submit" :disabled="!canSubmit || submitting">
           {{ submitLabel }}
         </button>
+        <nav class="legal-links" aria-label="legal">
+          <router-link to="/terms">{{ t('common.legal.terms') }}</router-link>
+          <span aria-hidden="true">·</span>
+          <router-link to="/privacy">{{ t('common.legal.privacy') }}</router-link>
+          <span aria-hidden="true">·</span>
+          <router-link to="/legal">{{ t('common.legal.tokusho') }}</router-link>
+        </nav>
       </section>
     </form>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   normalizeSlug,
   SLUG_TAKEN_MESSAGE,
   validateSlugFormat,
 } from '@/lib/reservedSlugs'
-import { generateSlugCandidate, withCollisionSuffix } from '@/lib/slugGenerator'
-import { tripIncludesLine, tripPriceButtonLabel } from '@/lib/tripPlan'
+import {
+  generateSlugCandidate,
+  pickAvailableSlugs,
+  withCollisionSuffix,
+} from '@/lib/slugGenerator'
+import {
+  checkoutCurrency,
+  DEFAULT_PLAN_ID,
+  formatPlanPrice,
+  type PlanId,
+  tripPriceButtonLabel,
+} from '@/lib/tripPlan'
 import { createTripCheckout, isSlugTaken } from '@/lib/tripApi'
-import RevealAtField from '@/components/RevealAtField.vue'
+
+const { t } = useI18n()
 
 const step = ref<1 | 2>(1)
 const titleInput = ref('')
-const maxPhotos = ref(50)
-const revealAt = ref<Date | null>(null)
+const planId = ref<PlanId>(DEFAULT_PLAN_ID)
 const commentRequired = ref(true)
+const showNicknames = ref(false)
 const showDate = ref(true)
 const nameFocused = ref(false)
 const slugError = ref<string | null>(null)
@@ -149,9 +171,13 @@ const checking = ref(false)
 const generating = ref(false)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
+const altSlugs = ref<string[]>([])
+
+const planIds: PlanId[] = ['free', 'standard', 'plus']
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let checkSeq = 0
+let altSeq = 0
 
 const normalized = computed(() => normalizeSlug(titleInput.value))
 
@@ -159,7 +185,7 @@ const slugOk = computed(
   () => Boolean(normalized.value) && !slugError.value && slugAvailable.value && !checking.value,
 )
 
-const canSubmit = computed(() => slugOk.value && maxPhotos.value >= 1)
+const canSubmit = computed(() => slugOk.value)
 
 const statusKind = computed<'ok' | 'checking' | 'err' | null>(() => {
   if (!normalized.value && !checking.value) return null
@@ -170,25 +196,38 @@ const statusKind = computed<'ok' | 'checking' | 'err' | null>(() => {
 })
 
 const statusText = computed(() => {
-  if (statusKind.value === 'checking') return '名前を確認中…'
-  if (statusKind.value === 'ok') return 'この名前は使えます'
+  if (statusKind.value === 'checking') return t('create.checking')
+  if (statusKind.value === 'ok') return t('create.nameOk')
   return slugError.value ?? ''
 })
 
-const nextLabel = computed(() => {
-  if (slugOk.value) return '次へ'
-  if (!titleInput.value.trim()) return '名前を入力して次へ'
-  if (checking.value) return '名前を確認して次へ'
-  return '名前を確認して次へ'
+const submitLabel = computed(() => {
+  if (submitting.value) return t('create.preparing')
+  return tripPriceButtonLabel(planId.value)
 })
 
-const submitLabel = computed(() => {
-  if (submitting.value) return '準備中…'
-  return tripPriceButtonLabel()
+function planPriceLabel(id: PlanId) {
+  if (id === 'free') return t('plan.free.name')
+  return formatPlanPrice(id)
+}
+
+watch(statusKind, (kind) => {
+  if (kind === 'err' && normalized.value) {
+    void refreshAlts(normalized.value)
+  } else {
+    altSlugs.value = []
+  }
 })
+
+async function refreshAlts(avoid: string) {
+  const seq = ++altSeq
+  const found = await pickAvailableSlugs(2, isSlugTaken, [avoid])
+  if (seq === altSeq) altSlugs.value = found
+}
 
 function onTitleInput() {
   slugAvailable.value = false
+  altSlugs.value = []
   const formatErr = validateSlugFormat(titleInput.value)
   slugError.value = formatErr
   if (!normalized.value) {
@@ -244,14 +283,28 @@ async function runAvailabilityCheck(slug: string) {
   }
 }
 
+function applyAlt(slug: string) {
+  titleInput.value = slug
+  onTitleInput()
+}
+
 async function onGenerate() {
   generating.value = true
+  altSlugs.value = []
   try {
     let candidate = generateSlugCandidate()
-    for (let i = 0; i < 6; i++) {
-      titleInput.value = candidate
-      const ok = await runAvailabilityCheck(candidate)
-      if (ok) return
+    for (let i = 0; i < 8; i++) {
+      const formatErr = validateSlugFormat(candidate)
+      if (!formatErr) {
+        const taken = await isSlugTaken(candidate)
+        if (!taken) {
+          titleInput.value = candidate
+          slugError.value = null
+          slugAvailable.value = true
+          checking.value = false
+          return
+        }
+      }
       candidate = i % 2 === 0 ? withCollisionSuffix(candidate) : generateSlugCandidate()
     }
     titleInput.value = candidate
@@ -271,10 +324,11 @@ async function onSubmit() {
     const { url } = await createTripCheckout({
       slug,
       name: slug,
-      max_photos: maxPhotos.value,
-      reveal_at: revealAt.value ? revealAt.value.toISOString() : null,
+      plan_id: planId.value,
+      currency: checkoutCurrency(),
+      reveal_at: null,
       comment_required: commentRequired.value,
-      show_nicknames: false,
+      show_nicknames: showNicknames.value,
       date_format: showDate.value ? 'YY.M.D' : 'none',
     })
     window.location.href = url
@@ -288,6 +342,7 @@ async function onSubmit() {
 onBeforeUnmount(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
   checkSeq += 1
+  altSeq += 1
 })
 </script>
 
@@ -296,7 +351,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
 }
 
 .back {
@@ -321,27 +376,29 @@ onBeforeUnmount(() => {
 
 h1 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--ink-brown);
 }
 
 .head-copy p {
-  margin: 6px 0 0;
-  font-size: 0.82rem;
+  margin: 8px 0 0;
+  font-size: 0.84rem;
   color: var(--text-muted);
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
 }
 
 .step {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .field {
@@ -359,7 +416,7 @@ h1 {
 .title-input {
   flex: 1;
   min-width: 0;
-  font-size: 1.1rem;
+  font-size: 1.08rem;
   padding: 15px 72px 15px 16px;
   color: var(--text);
 }
@@ -373,7 +430,7 @@ h1 {
   top: 50%;
   right: 8px;
   transform: translateY(-50%);
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -391,8 +448,16 @@ h1 {
 
 .hint {
   margin: -4px 0 0;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
 }
 
 .status {
@@ -403,11 +468,11 @@ h1 {
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 0.8rem;
-  align-self: flex-start;
 }
 
 .status.ok {
-  background: #eef5ef;
+  padding: 0;
+  background: transparent;
   color: #3f6b49;
 }
 
@@ -419,6 +484,31 @@ h1 {
 .status.err {
   background: #f8ecec;
   color: #a94442;
+}
+
+.alts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.alt-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-brown);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.alt-chip:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .spinner {
@@ -437,55 +527,93 @@ h1 {
 }
 
 .next {
-  margin-top: 8px;
-}
-
-.foot-note {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  text-align: center;
+  margin-top: 12px;
 }
 
 .chosen-name {
-  margin: 0 0 8px;
-  font-size: 1.35rem;
-  font-weight: 700;
+  margin: 0 0 4px;
+  font-size: 1.55rem;
+  font-weight: 500;
   color: var(--ink-brown);
   word-break: break-all;
+  line-height: 1.35;
 }
 
-.settings-head {
-  margin-bottom: 4px;
+.plan-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.settings-head .flow-section-title {
-  margin-bottom: 6px;
+.plan-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
 
-.settings-lead {
-  margin: 0;
-  font-size: 0.82rem;
+.plan-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.plan-name {
+  grid-column: 1;
+  font-weight: 700;
+  color: var(--ink-brown);
+  font-size: 0.95rem;
+}
+
+.plan-summary {
+  grid-column: 1;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
 
-.rec {
-  font-weight: 500;
-  color: var(--text-muted);
+.plan-price {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .switch-row {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
-.includes {
-  margin: 0;
-  font-size: 0.78rem;
+.legal-links {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.legal-links a {
   color: var(--text-muted);
-  text-align: center;
+  text-decoration: none;
+}
+
+.legal-links span {
+  color: #c4beb5;
 }
 
 .err {

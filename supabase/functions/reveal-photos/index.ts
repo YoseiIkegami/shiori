@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
     const tripSelect =
-      'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, payment_status'
+      'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, payment_status, show_nicknames, date_format'
 
     let { data: trip, error: tripError } = await supabase
       .from('trips')
@@ -124,10 +124,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { data: photos, error: photosError } = await supabase
+    const { data: photosRaw, error: photosError } = await supabase
       .from('photos')
-      .select('id, trip_id, storage_path, comment, rotation, created_at')
+      .select('id, trip_id, storage_path, comment, rotation, created_at, member_id')
       .eq('trip_id', trip.id)
+      .eq('is_hidden', false)
       .order('created_at', { ascending: true })
 
     if (photosError) {
@@ -138,10 +139,47 @@ Deno.serve(async (req) => {
       })
     }
 
+    const photos = (photosRaw ?? []) as Array<{
+      id: string
+      trip_id: string
+      storage_path: string
+      comment: string
+      rotation: number | null
+      created_at: string
+      member_id?: string | null
+    }>
+
+    const memberIds = [
+      ...new Set(
+        photos
+          .map((p: { member_id?: string | null }) => p.member_id)
+          .filter((id: string | null | undefined): id is string => Boolean(id)),
+      ),
+    ]
+    const nicknameById = new Map<string, string>()
+    if (memberIds.length > 0) {
+      const { data: members, error: membersError } = await supabase
+        .from('members')
+        .select('id, nickname')
+        .in('id', memberIds)
+      if (membersError) console.error('members lookup error', membersError)
+      for (const m of members ?? []) {
+        nicknameById.set(m.id, m.nickname)
+      }
+    }
+
     const SIGNED_URL_EXPIRES_SEC = 60 * 60 * 4 // 4 hours
 
     const withUrls = await Promise.all(
-      (photos ?? []).map(async (photo) => {
+      photos.map(async (photo: {
+        id: string
+        trip_id: string
+        storage_path: string
+        comment: string
+        rotation: number | null
+        created_at: string
+        member_id?: string | null
+      }) => {
         const { data: signed, error: signError } = await supabase.storage
           .from('trip-photos')
           .createSignedUrl(photo.storage_path, SIGNED_URL_EXPIRES_SEC)
@@ -156,6 +194,8 @@ Deno.serve(async (req) => {
           comment: photo.comment,
           rotation: photo.rotation,
           created_at: photo.created_at,
+          member_id: photo.member_id ?? null,
+          nickname: photo.member_id ? nicknameById.get(photo.member_id) ?? null : null,
           url: signed?.signedUrl ?? null,
         }
       }),
@@ -172,6 +212,8 @@ Deno.serve(async (req) => {
           photos_count: trip.photos_count,
           max_photos: trip.max_photos,
           payment_status: trip.payment_status,
+          show_nicknames: trip.show_nicknames === true,
+          date_format: trip.date_format ?? 'YY.M.D',
         },
         photos: withUrls.filter((p) => p.url),
         preview: preview && trip.is_revealed !== true,

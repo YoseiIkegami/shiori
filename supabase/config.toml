@@ -29,3 +29,10 @@ verify_jwt = true
 # Stripe posts directly with its own signature — no Supabase JWT.
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.report-photo]
+verify_jwt = true
+
+# Invoked by cron / ops; optional CRON_SECRET header. No end-user JWT.
+[functions.purge-expired-trips]
+verify_jwt = false

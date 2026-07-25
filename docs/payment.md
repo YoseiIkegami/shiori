@@ -3,18 +3,19 @@
 ## 概要
 
 - **Stripe Checkout**（ホスト画面）で一括支払い
-- テストモード時は画面に「サンドボックス」表示
+- プランは松竹梅（FREE / Standard / Plus）
+- 通貨はアプリ locale（ja → JPY、それ以外 → USD）
 - 未払い trip は撮影・閲覧不可
 
-## 価格（現行）
+## プラン
 
-| 項目 | 値 |
-|---|---|
-| 通貨 | JPY |
-| 基準価格 | ¥150 |
-| 含まれるもの | フィルム 50 枚・7 日保存 |
+| plan_id | 枚数 | 保存 | JPY | USD | 決済 |
+|---|---|---|---|---|---|
+| `free` | 3 | 約2時間（セッション） | 無料 | Free | なし・即 paid |
+| `standard` | 50 | 7日 | ¥150 | $1 | Checkout |
+| `plus` | 500 | 無期限（`expires_at` NULL） | ¥750 | $5 | Checkout |
 
-将来: 保存期間延長は追加決済（Phase 2 構想・未実装）
+金額は Edge Function のマスタが決定（クライアントの amount は信用しない）。
 
 ## 環境変数
 
@@ -24,58 +25,41 @@
 VITE_STRIPE_BASE_AMOUNT=150
 ```
 
-表示用。`STRIPE_BASE_AMOUNT` と一致させる。
+（表示フォールバック用。実課金はプランマスタ）
 
 ### Edge Functions（Supabase secrets）
 
 ```
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_BASE_CURRENCY=jpy
-STRIPE_BASE_AMOUNT=150
 ALLOWED_ORIGIN=https://shiori.ikg-systems.com
 APP_ORIGIN=https://shiori.ikg-systems.com
-# RESEND_API_KEY=...   # Phase email（現状は webhook stub のみ）
+# RESEND_API_KEY=...
 ```
 
-幹事リンクのトランザクションメールは次フェーズ。`stripe-webhook` に `maybeSendOrganizerLinks` 差し込み口あり（`RESEND_API_KEY` 未設定時は no-op）。
-
-## フロー詳細
+## フロー
 
 ### create-trip-checkout
 
 | action | 用途 |
 |---|---|
-| （省略） | trip 作成 + Checkout Session → `{ url }` |
-| `result` + `session_id` | 決済結果取得（success ページ） |
+| （省略） | trip 作成。paid プランは Checkout URL、free は success URL |
+| `result` + `session_id` | 決済結果取得 |
+| `delete_free` | FREE trip の best-effort 削除（token 必須） |
 
-Checkout メタデータ: `trip_id`, `slug`, `type: 'base'`
+metadata: `trip_id`, `slug`, `plan_id`, `type`
 
 ### stripe-webhook
 
-- イベント: `checkout.session.completed`
-- `orders` INSERT
-- `trips.payment_status = 'paid'`
-- `expires_at` = now + 7 日
+- `checkout.session.completed`
+- orders INSERT
+- `payment_status = paid`
+- `expires_at`: standard = now+7日、plus = NULL
 
-## テスト手順
+## テスト
 
-1. `/create` で新規 slug を作成
-2. Stripe Checkout（サンドボックス）で支払い
-3. テストカード: `4242 4242 4242 4242`、未来の有効期限、任意 CVC
-4. `/create/success` で「旅のリンクができました」を確認
-5. `/t/{slug}` で撮影可能か確認
+1. `/create` で slug → Standard / Plus を選び Checkout
+2. テストカード `4242…4242`
+3. FREE は決済なしで success → `/t/{slug}`（閉じると削除試行、TTL でも回収）
 
-拒否テスト: `4000 0000 0000 0002`
-
-### トラブルシュート
-
-| 症状 | 確認 |
-|---|---|
-| 「決済を確認しています」のまま | Stripe Webhook の `checkout.session.completed` 成功ログ |
-| pending のまま | webhook URL・`STRIPE_WEBHOOK_SECRET` |
-
-## セキュリティ
-
-- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` はクライアントに置かない
-- 本番キーをチャット等に貼った場合はローテーション推奨
+詳細: [`i18n.md`](./i18n.md), [`trip-settings.md`](./trip-settings.md)

@@ -1,6 +1,6 @@
 # 実装状況
 
-最終更新: Phase 2a + UI 統一（2026-07）
+最終更新: Phase 2b / 2c（2026-07）
 
 ## 完了
 
@@ -38,22 +38,25 @@
 - [x] QR 二重表示バグ修正（`QrCode.vue`）
 - [x] `stripe-webhook` 幹事メール差し込み口（no-op stub）
 
-## 未着手・準備中
-
 ### Phase 2b（投稿者体験）
 
-- [ ] ニックネーム入力・変更 UI
-- [ ] ポラロイドへのニックネームオーバーレイ
-- [ ] 保存時の動的焼き込み
-- [ ] `show_nicknames` の有効化
-- [ ] `date_format` の撮影フローへの完全反映確認
+- [x] ニックネーム入力・変更 UI（`NicknameDialog` + カメラ上チップ）
+- [x] Create / Manage の `show_nicknames` トグル
+- [x] 投稿時 `member_id` / `createMember` / `update_member_nickname` RPC
+- [x] `reveal-photos` が nickname を返す
+- [x] ボード DOM オーバーレイ（焼き込みしない）
+- [x] 保存時のみ Canvas 焼き込み（`bakeNicknameOntoPolaroid`）
+- [x] `date_format` を撮影・合成に反映
 
 ### Phase 2c（運用・法務）
 
-- [ ] `expires_at` による自動削除バッチ
-- [ ] 利用規約・プライバシー・特商法
-- [ ] 通報・`photos.is_hidden`
-- [ ] Cloudflare + CSAM Scanning
+- [x] `photos.is_hidden` + `report-photo` Edge Function
+- [x] PhotoSwipe 通報ボタン → 非表示
+- [x] `purge_expired_trips` RPC + `purge-expired-trips` Edge Function（`expires_at IS NULL` スキップ）
+- [x] `/terms` `/privacy` `/legal` 下書き + ホーム/作成フッターリンク
+- [x] Cloudflare / CSAM 手順: [`docs/cloudflare-csam.md`](./cloudflare-csam.md)
+
+## 未着手・準備中
 
 ### その他
 
@@ -61,7 +64,10 @@
 - [ ] `reveal-photos` の `preview` モード除去
 - [ ] 保存期間延長の追加決済
 - [ ] ホームの実写デモボード画像（現状 CSS モック）
-- [ ] README の Phase 1 手動 INSERT 記述の更新
+- [ ] 幹事メール Resend 本番連携
+- [ ] 法務ページの事業者情報の確定差し替え
+- [ ] `purge-expired-trips` の日次 Cron 登録（Dashboard）
+- [ ] Cloudflare オレンジ雲 / CSAM の実作業（人手）
 
 ## 既知の制約
 
@@ -70,5 +76,5 @@
 | slug 変更 | 発行後不可 |
 | pending trip | 決済完了まで使用不可。Webhook 失敗時は success で待機表示 |
 | レガシー UUID URL | `/t/{uuid}` も動作するが新規は slug 推奨 |
-| ニックネーム | DB のみ。作成・幹事 UI からは非表示（2b で復活） |
 | 幹事メール | Webhook stub のみ。Resend 本番連携は未着手 |
+| 通報 | 非表示のみ。再表示は SQL / 運営作業 |

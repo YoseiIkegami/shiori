@@ -58,3 +58,9 @@ https://{PROJECT_REF}.supabase.co/functions/v1/stripe-webhook
 ```
 
 イベント: `checkout.session.completed`
+
+## 運用（Phase 2c）
+
+- 通報: `report-photo` → `photos.is_hidden`
+- 期限削除: `purge-expired-trips`（`expires_at IS NULL` は対象外）
+- Cloudflare / CSAM: [`cloudflare-csam.md`](./cloudflare-csam.md)

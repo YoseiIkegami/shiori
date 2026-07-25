@@ -1,0 +1,80 @@
+{
+  "common": {
+    "back": "戻る",
+    "close": "閉じる",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "copyFailed": "コピーに失敗しました",
+    "legal": {
+      "terms": "利用規約",
+      "privacy": "プライバシー",
+      "tokusho": "特商法"
+    },
+    "langJa": "日本語",
+    "langEn": "English"
+  },
+  "home": {
+    "brand": "SHIORI",
+    "headline": "旅行中はお休み。旅の終わりに、みんなで開こう。",
+    "tagline": "届くまで、開かない写真。",
+    "cta": "旅をはじめる",
+    "priceLine": "{photos}枚・{days}日 {price}",
+    "howto": {
+      "label": "使い方",
+      "slidesLabel": "スライド",
+      "slideN": "{n}枚目",
+      "shoot": {
+        "title": "撮る",
+        "body": "旅のあいだ、写真を残す。",
+        "caption": "いまの一枚"
+      },
+      "seal": {
+        "title": "隠す",
+        "body": "枚数がそろうまで、中身は見えない。",
+        "caption": "封をしたまま"
+      },
+      "open": {
+        "title": "開く",
+        "body": "揃ったら、みんなで一斉に見る。",
+        "caption": "ひらく瞬間"
+      }
+    }
+  },
+  "create": {
+    "title": "旅をはじめる",
+    "stepName": "旅のなまえを決める",
+    "stepSettings": "旅の設定",
+    "nameLabel": "旅のなまえ",
+    "nameHint": "英数字とハイフンで 3〜30文字",
+    "suggest": "提案",
+    "next": "次へ",
+    "checking": "名前を確認中…",
+    "nameOk": "この名前は使えます",
+    "planLabel": "プラン",
+    "commentRequired": "ひとことを必須にする",
+    "showNicknames": "撮った人の名前を表示",
+    "showDate": "日付を表示する",
+    "preparing": "準備中…",
+    "submitFree": "無料ではじめる",
+    "submitPaid": "{price} で旅をはじめる",
+    "freeNote": "閉じるとまもなく消えます"
+  },
+  "plan": {
+    "free": {
+      "name": "FREE",
+      "summary": "3枚・お試し"
+    },
+    "standard": {
+      "name": "Standard",
+      "summary": "50枚・7日"
+    },
+    "plus": {
+      "name": "Plus",
+      "summary": "500枚・ずっと残る"
+    }
+  },
+  "manage": {
+    "filmCount": "フィルムの枚数",
+    "filmFixed": "{n} 枚"
+  }
+}
