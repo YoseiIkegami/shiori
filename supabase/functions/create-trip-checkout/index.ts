@@ -31,6 +31,13 @@ const PLANS: Record<
   plus: { maxPhotos: 500, retentionDays: null, amounts: { jpy: 750, usd: 500 } },
 }
 
+/** Display names. plan_id `plus` is kept internally; the label is Premium. */
+const PLAN_LABELS: Record<PlanId, string> = {
+  free: 'FREE',
+  standard: 'Standard',
+  plus: 'Premium',
+}
+
 const corsHeaders = (origin: string | null) => {
   const allowed = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
   const requestOrigin = origin ?? ''
@@ -162,7 +169,39 @@ Deno.serve(async (req) => {
     if (error || !trip) return json({ error: 'Trip not found' }, 404, headers)
     if (trip.organizer_token !== token) return json({ error: 'Invalid token' }, 403, headers)
     if (trip.plan_id !== 'free') return json({ error: 'Not a free trip' }, 400, headers)
-    await supabase.from('trips').delete().eq('id', trip.id)
+
+    // photos.trip_id / members.trip_id の FK は NO ACTION —
+    // Storage → photos → members → trips の順に掃除しないと削除が失敗する
+    const bucket = 'trip-photos'
+    const { data: entries, error: listError } = await supabase.storage
+      .from(bucket)
+      .list(trip.id, { limit: 1000 })
+    if (listError) {
+      console.error('delete_free storage list error', trip.id, listError)
+    }
+    const paths = (entries ?? [])
+      .filter((e) => e.name && !e.name.endsWith('/'))
+      .map((e) => `${trip.id}/${e.name}`)
+    if (paths.length) {
+      const { error: removeError } = await supabase.storage.from(bucket).remove(paths)
+      if (removeError) console.error('delete_free storage remove error', trip.id, removeError)
+    }
+
+    const { error: photosError } = await supabase.from('photos').delete().eq('trip_id', trip.id)
+    if (photosError) {
+      console.error('delete_free photos error', trip.id, photosError)
+      return json({ error: 'Failed to delete trip data' }, 500, headers)
+    }
+    const { error: membersError } = await supabase.from('members').delete().eq('trip_id', trip.id)
+    if (membersError) {
+      console.error('delete_free members error', trip.id, membersError)
+      return json({ error: 'Failed to delete trip data' }, 500, headers)
+    }
+    const { error: deleteError } = await supabase.from('trips').delete().eq('id', trip.id)
+    if (deleteError) {
+      console.error('delete_free trip error', trip.id, deleteError)
+      return json({ error: 'Failed to delete trip' }, 500, headers)
+    }
     return json({ ok: true }, 200, headers)
   }
 
@@ -281,7 +320,7 @@ Deno.serve(async (req) => {
           price_data: {
             currency,
             unit_amount: plan.amounts[currency],
-            product_data: { name: `SHIORI ${planId}: ${name}` },
+            product_data: { name: `SHIORI ${PLAN_LABELS[planId]}: ${name}` },
           },
         },
       ],

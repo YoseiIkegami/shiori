@@ -100,6 +100,35 @@ body {
   padding: calc(12px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
 }
 
+/* 全ページ共通ヘッダー: タイトル行の位置と後続コンテンツの開始高さを揃える */
+.flow-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 66px;
+  margin-bottom: 32px;
+}
+
+/* 主ボタンは全画面で下端固定（トップページと同じ重心）。ページ側に .has-flow-bottom を付ける */
+.flow-bottom {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  z-index: 100;
+  width: 100%;
+  max-width: 420px;
+  padding: 18px 20px calc(16px + var(--safe-bottom));
+  background: linear-gradient(180deg, rgba(248, 247, 244, 0) 0%, var(--surface) 32%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.has-flow-bottom {
+  padding-bottom: calc(150px + var(--safe-bottom));
+}
+
 .flow-divider {
   border: 0;
   border-top: 1px solid var(--line);

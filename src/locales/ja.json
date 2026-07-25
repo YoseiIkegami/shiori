@@ -2,23 +2,22 @@
   "common": {
     "back": "戻る",
     "close": "閉じる",
+    "ok": "OK",
     "copy": "コピー",
     "copied": "コピーしました",
     "copyFailed": "コピーに失敗しました",
+    "language": "言語",
     "legal": {
       "terms": "利用規約",
       "privacy": "プライバシー",
       "tokusho": "特商法"
-    },
-    "langJa": "日本語",
-    "langEn": "English"
+    }
   },
   "home": {
     "brand": "SHIORI",
-    "headline": "旅行中はお休み。旅の終わりに、みんなで開こう。",
-    "tagline": "届くまで、開かない写真。",
+    "brandSub": "Instant Camera",
+    "headline": "旅行中はお休み。\n旅の終わりに、みんなで開こう。",
     "cta": "旅をはじめる",
-    "priceLine": "{photos}枚・{days}日 {price}",
     "howto": {
       "label": "使い方",
       "slidesLabel": "スライド",
@@ -42,14 +41,16 @@
   },
   "create": {
     "title": "旅をはじめる",
-    "stepName": "旅のなまえを決める",
-    "stepSettings": "旅の設定",
+    "stepSetup": "旅のなまえと設定",
+    "stepPlan": "プランを選ぶ",
     "nameLabel": "旅のなまえ",
+    "namePlaceholder": "例: natsu-ibuki",
     "nameHint": "英数字とハイフンで 3〜30文字",
     "suggest": "提案",
     "next": "次へ",
     "checking": "名前を確認中…",
     "nameOk": "この名前は使えます",
+    "checkFailed": "確認に失敗しました",
     "planLabel": "プラン",
     "commentRequired": "ひとことを必須にする",
     "showNicknames": "撮った人の名前を表示",
@@ -57,7 +58,14 @@
     "preparing": "準備中…",
     "submitFree": "無料ではじめる",
     "submitPaid": "{price} で旅をはじめる",
-    "freeNote": "閉じるとまもなく消えます"
+    "freeNote": "閉じるとまもなく消えます",
+    "createFailed": "発行に失敗しました",
+    "noCheckoutUrl": "Checkout URL が取得できませんでした"
+  },
+  "slug": {
+    "format": "英数字とハイフンで 3〜30文字",
+    "reserved": "この名前は使えません",
+    "taken": "この名前はすでに使われています"
   },
   "plan": {
     "free": {
@@ -69,12 +77,156 @@
       "summary": "50枚・7日"
     },
     "plus": {
-      "name": "Plus",
+      "name": "Premium",
       "summary": "500枚・ずっと残る"
     }
   },
+  "trip": {
+    "notFound": "旅が見つかりません",
+    "loadFailed": "旅情報の取得に失敗しました",
+    "pending": "この旅はまだ公開準備中です",
+    "photosLoadFailed": "写真の取得に失敗しました",
+    "processFailed": "写真の処理に失敗しました",
+    "composeFailed": "写真の合成に失敗しました",
+    "sendFailed": "送信に失敗しました。もう一度お試しください。",
+    "commentNeeded": "コメントを入力してください",
+    "freeEnd": {
+      "note": "おためしはここまで。この写真はまもなく消えます。",
+      "cta": "旅をはじめる"
+    }
+  },
+  "camera": {
+    "label": "撮影画面",
+    "idleHint": "シャッターを押して撮影",
+    "remainPrefix": "あと",
+    "remainSuffix": "枚",
+    "shutter": "写真を撮る",
+    "switchCamera": "カメラ切替",
+    "toFront": "インカメラに切替",
+    "toBack": "アウトカメラに切替"
+  },
+  "filter": {
+    "none": "Normal",
+    "orange": "Warm",
+    "cream": "Cream",
+    "retro": "Retro",
+    "blue": "Cool",
+    "fade": "Fade",
+    "mono": "Mono"
+  },
+  "preview": {
+    "commentPlaceholder": "タップしてコメントを入力",
+    "filter": "フィルター",
+    "retake": "撮り直す",
+    "next": "仕上がりを確認",
+    "sheetTitle": "ひとことメッセージ",
+    "sheetHint": "30文字まで",
+    "sheetPlaceholder": "旅のひとこまをひとこと",
+    "sheetDone": "入力完了",
+    "needComment": "コメントを入力"
+  },
+  "confirm": {
+    "ask": "この思い出を残しますか？",
+    "send": "思い出を送る",
+    "retry": "もう一度送信",
+    "back": "戻る"
+  },
+  "dialog": {
+    "intro": {
+      "title": "思い出を残しましょう",
+      "body": "撮った写真は、旅の終わりに"
+    },
+    "reveal": {
+      "title": "写真を撮り切りました",
+      "body": "旅の思い出を振り返りましょう"
+    },
+    "nickname": {
+      "title": "あなたの名前",
+      "hint": "12文字まで",
+      "placeholder": "なまえ",
+      "saving": "保存中…",
+      "required": "名前を入力してください",
+      "saveFailed": "名前の保存に失敗しました"
+    }
+  },
+  "board": {
+    "empty": "まだ写真がありません",
+    "retry": "再試行",
+    "saveAll": "すべて保存",
+    "openShare": "共有を開く",
+    "select": "選ぶ",
+    "cancelSelect": "やめる",
+    "saveSelected": "{n}枚を保存",
+    "saveSelectedConfirm": "選択中の{n}枚を保存しますか？",
+    "save": "保存",
+    "saveFramed": "そのまま保存",
+    "savePhotoOnly": "写真だけ保存（フレーム・日付なし）",
+    "report": "通報",
+    "reportConfirm": "この写真を通報しますか？",
+    "reported": "通報しました",
+    "reportFailed": "通報に失敗しました",
+    "imageFailed": "画像を取得できませんでした",
+    "saveFailed": "保存に失敗しました",
+    "downloadStarted": "ダウンロードを開始しました",
+    "needsRetap": "準備ができました。もう一度押してください"
+  },
   "manage": {
+    "share": "共有する",
+    "revealed": "解禁済み",
+    "photosStat": "{count} / {max} 枚",
+    "shareLink": "共有リンク",
+    "copyLink": "リンクをコピー",
+    "showQr": "QRコードを表示",
+    "settings": "旅の設定",
+    "displayName": "表示名",
     "filmCount": "フィルムの枚数",
-    "filmFixed": "{n} 枚"
+    "filmFixed": "{n} 枚",
+    "dateLabel": "日付の表示",
+    "dateNone": "なし",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "保存しました",
+    "saveFailed": "保存に失敗しました",
+    "endSection": "終了",
+    "endBtn": "旅を終了して写真を開く",
+    "ending": "処理中…",
+    "endConfirmTitle": "旅を終了しますか？",
+    "endConfirmMsg": "写真の山が解禁されます。この操作は取り消せません。",
+    "endDone": "解禁しました",
+    "endFailed": "終了に失敗しました",
+    "tokenRequired": "トークンが必要です",
+    "loadFailed": "読み込みに失敗しました",
+    "opFailed": "操作に失敗しました",
+    "shareText": "旅の写真、一緒に残そう"
+  },
+  "success": {
+    "titlePaid": "旅のリンクができました",
+    "titlePending": "決済を確認しています",
+    "pendingLead": "しばらくしてから再読み込みしてください",
+    "how1": "リンクをみんなに送る",
+    "how1Note": "写真はこのリンクの中に集まります。LINE などでそのまま共有できます",
+    "how2": "旅のあいだ、それぞれ撮る",
+    "how3": "終わったら、みんなで一斉に開く",
+    "otherShare": "その他の共有方法",
+    "sendLink": "リンクを送る",
+    "copyLink": "リンクをコピー",
+    "settings": "幹事メニュー",
+    "emailHint": "設定リンクはメールにも送信予定です",
+    "bookmark": "幹事用リンクはブックマークにも保存してください",
+    "copyManage": "設定リンクをコピー",
+    "openManage": "設定ページを開く",
+    "startShooting": "撮影をはじめる",
+    "noSession": "セッションが見つかりません",
+    "resultFailed": "結果の取得に失敗しました"
+  },
+  "notFound": {
+    "caption": "ここはどこ…？",
+    "title": "地図にない場所に来てしまいました",
+    "body": "お探しのページは、旅の途中で消えたか、はじめからなかったようです。",
+    "cta": "トップへ戻る"
+  },
+  "member": {
+    "nameRequired": "名前を入力してください",
+    "createFailed": "メンバーの作成に失敗しました"
   }
 }

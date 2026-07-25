@@ -1,6 +1,6 @@
 <template>
-  <main class="create flow-page flow-shell">
-    <header class="head">
+  <main class="create flow-page flow-shell has-flow-bottom">
+    <header class="head flow-head">
       <button
         v-if="step === 2"
         type="button"
@@ -13,7 +13,7 @@
       <router-link v-else class="back" to="/" :aria-label="t('common.back')">←</router-link>
       <div class="head-copy">
         <h1>{{ t('create.title') }}</h1>
-        <p v-if="step === 1">{{ t('create.stepName') }}</p>
+        <p>{{ step === 1 ? t('create.stepSetup') : t('create.stepPlan') }}</p>
       </div>
       <span class="flow-step">{{ step }} / 2</span>
     </header>
@@ -30,7 +30,7 @@
               maxlength="30"
               autocomplete="off"
               spellcheck="false"
-              placeholder="例: natsu-ibuki"
+              :placeholder="t('create.namePlaceholder')"
               @input="onTitleInput"
               @focus="nameFocused = true"
               @blur="nameFocused = false"
@@ -67,20 +67,24 @@
           </div>
         </div>
 
-        <button
-          type="button"
-          class="flow-btn primary next"
-          :disabled="!slugOk"
-          @click="step = 2"
-        >
-          {{ t('create.next') }}
-        </button>
+        <div class="field switch-row">
+          <span class="flow-label">{{ t('create.commentRequired') }}</span>
+          <van-switch v-model="commentRequired" size="22px" active-color="#bd5825" />
+        </div>
+
+        <div class="field switch-row">
+          <span class="flow-label">{{ t('create.showDate') }}</span>
+          <van-switch v-model="showDate" size="22px" active-color="#bd5825" />
+        </div>
+
+        <div class="field switch-row">
+          <span class="flow-label">{{ t('create.showNicknames') }}</span>
+          <van-switch v-model="showNicknames" size="22px" active-color="#bd5825" />
+        </div>
       </section>
 
       <section v-else class="step">
         <p class="chosen-name display-type">{{ normalized }}</p>
-
-        <h2 class="flow-section-title">{{ t('create.stepSettings') }}</h2>
 
         <div class="field">
           <span class="flow-label">{{ t('create.planLabel') }}</span>
@@ -102,24 +106,25 @@
           </div>
           <p v-if="planId === 'free'" class="hint">{{ t('create.freeNote') }}</p>
         </div>
+      </section>
 
-        <div class="field switch-row">
-          <span class="flow-label">{{ t('create.commentRequired') }}</span>
-          <van-switch v-model="commentRequired" size="22px" active-color="#bd5825" />
-        </div>
-
-        <div class="field switch-row">
-          <span class="flow-label">{{ t('create.showNicknames') }}</span>
-          <van-switch v-model="showNicknames" size="22px" active-color="#bd5825" />
-        </div>
-
-        <div class="field switch-row">
-          <span class="flow-label">{{ t('create.showDate') }}</span>
-          <van-switch v-model="showDate" size="22px" active-color="#bd5825" />
-        </div>
-
-        <p v-if="submitError" class="err">{{ submitError }}</p>
-        <button class="flow-btn primary" type="submit" :disabled="!canSubmit || submitting">
+      <div class="flow-bottom">
+        <p v-if="step === 2 && submitError" class="err">{{ submitError }}</p>
+        <button
+          v-if="step === 1"
+          type="button"
+          class="flow-btn primary"
+          :disabled="!slugOk"
+          @click="step = 2"
+        >
+          {{ t('create.next') }}
+        </button>
+        <button
+          v-else
+          class="flow-btn primary"
+          type="submit"
+          :disabled="!canSubmit || submitting"
+        >
           {{ submitLabel }}
         </button>
         <nav class="legal-links" aria-label="legal">
@@ -129,17 +134,18 @@
           <span aria-hidden="true">·</span>
           <router-link to="/legal">{{ t('common.legal.tokusho') }}</router-link>
         </nav>
-      </section>
+      </div>
     </form>
   </main>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   normalizeSlug,
-  SLUG_TAKEN_MESSAGE,
+  slugTakenMessage,
   validateSlugFormat,
 } from '@/lib/reservedSlugs'
 import {
@@ -157,6 +163,7 @@ import {
 import { createTripCheckout, isSlugTaken } from '@/lib/tripApi'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const step = ref<1 | 2>(1)
 const titleInput = ref('')
@@ -264,7 +271,7 @@ async function runAvailabilityCheck(slug: string) {
     const taken = await isSlugTaken(slug)
     if (seq !== checkSeq) return false
     if (taken) {
-      slugError.value = SLUG_TAKEN_MESSAGE
+      slugError.value = slugTakenMessage()
       slugAvailable.value = false
     } else {
       slugError.value = null
@@ -274,7 +281,7 @@ async function runAvailabilityCheck(slug: string) {
   } catch (e) {
     console.error(e)
     if (seq === checkSeq) {
-      slugError.value = '確認に失敗しました'
+      slugError.value = t('create.checkFailed')
       slugAvailable.value = false
     }
     return false
@@ -308,7 +315,7 @@ async function onGenerate() {
       candidate = i % 2 === 0 ? withCollisionSuffix(candidate) : generateSlugCandidate()
     }
     titleInput.value = candidate
-    slugError.value = SLUG_TAKEN_MESSAGE
+    slugError.value = slugTakenMessage()
     slugAvailable.value = false
   } finally {
     generating.value = false
@@ -321,7 +328,7 @@ async function onSubmit() {
   submitting.value = true
   try {
     const slug = normalized.value
-    const { url } = await createTripCheckout({
+    const res = await createTripCheckout({
       slug,
       name: slug,
       plan_id: planId.value,
@@ -331,11 +338,22 @@ async function onSubmit() {
       show_nicknames: showNicknames.value,
       date_format: showDate.value ? 'YY.M.D' : 'none',
     })
-    window.location.href = url
+    // FREE はSPA遷移で本ページを KeepAlive に残す（お試し後、同じ設定・同じ名前のまま戻れる）
+    if (res.free && res.slug && res.organizer_token) {
+      submitting.value = false
+      void router.push({
+        path: '/create/success',
+        query: { free: '1', slug: res.slug, token: res.organizer_token },
+      })
+      return
+    }
+    window.location.href = res.url
   } catch (e) {
     console.error(e)
-    submitError.value = e instanceof Error ? e.message : '発行に失敗しました'
+    submitError.value = e instanceof Error ? e.message : t('create.createFailed')
     submitting.value = false
+    // 失敗理由が slug 重複のことがある（FREE お試し直後など）— 状態を取り直す
+    void runAvailabilityCheck(normalized.value)
   }
 }
 
@@ -347,13 +365,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 40px;
-}
-
 .back {
   display: grid;
   place-items: center;
@@ -524,10 +535,6 @@ h1 {
   to {
     transform: rotate(360deg);
   }
-}
-
-.next {
-  margin-top: 12px;
 }
 
 .chosen-name {

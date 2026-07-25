@@ -9,6 +9,16 @@ export const SUPPORTED_LOCALES = ['ja', 'en'] as const
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]
 export type CheckoutCurrency = 'jpy' | 'usd'
 
+/** Native-language labels for the locale switcher. Add a row per new locale. */
+export const LOCALE_LABELS: Record<AppLocale, string> = {
+  ja: '日本語',
+  en: 'English',
+}
+
+function isAppLocale(v: unknown): v is AppLocale {
+  return (SUPPORTED_LOCALES as readonly string[]).includes(v as string)
+}
+
 const STORAGE_KEY = 'shiori.locale'
 
 export const i18n = createI18n({
@@ -30,7 +40,8 @@ export const i18n = createI18n({
         style: 'currency',
         currency: 'USD',
         currencyDisplay: 'narrowSymbol',
-        maximumFractionDigits: 0,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
       },
     },
   },
@@ -39,12 +50,17 @@ export const i18n = createI18n({
 export function detectLocale(): AppLocale {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === 'ja' || stored === 'en') return stored
+    if (isAppLocale(stored)) return stored
   } catch {
     /* ignore */
   }
-  const nav = typeof navigator !== 'undefined' ? navigator.language : 'ja'
-  return nav.toLowerCase().startsWith('ja') ? 'ja' : 'en'
+  const candidates =
+    typeof navigator !== 'undefined' ? navigator.languages ?? [navigator.language] : []
+  for (const lang of candidates) {
+    const base = lang.toLowerCase().split('-')[0]
+    if (isAppLocale(base)) return base
+  }
+  return 'en'
 }
 
 export function currencyForLocale(locale: AppLocale = getLocale()): CheckoutCurrency {
@@ -53,7 +69,7 @@ export function currencyForLocale(locale: AppLocale = getLocale()): CheckoutCurr
 
 export function getLocale(): AppLocale {
   const loc = i18n.global.locale.value
-  return loc === 'en' ? 'en' : 'ja'
+  return isAppLocale(loc) ? loc : 'ja'
 }
 
 function syncDocumentLang(locale: AppLocale) {

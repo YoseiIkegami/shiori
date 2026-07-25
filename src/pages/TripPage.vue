@@ -11,7 +11,7 @@
     <van-empty
       v-else-if="trip && !isPaid"
       image="error"
-      description="この旅はまだ公開準備中です"
+      :description="t('trip.pending')"
     />
 
     <template v-else-if="trip">
@@ -65,7 +65,7 @@
             class="nick-chip handwriting"
             @click="openNicknameEdit"
           >
-            {{ nicknameDraft || '名前' }}
+            {{ nicknameDraft || t('dialog.nickname.placeholder') }}
           </button>
 
           <CameraFrame
@@ -73,7 +73,6 @@
             :trip-name="trip.name"
             :photos-count="trip.photos_count"
             :max-photos="trip.max_photos"
-            v-model:filter-mode="filterMode"
             @capture="onCapture"
           />
 
@@ -136,6 +135,32 @@
           @reported="onPhotoReported"
         />
       </Transition>
+
+      <template v-if="mode === 'gallery' && trip.plan_id === 'free' && !showRevealDialog">
+        <div v-if="!freeCtaMin" class="free-cta">
+          <button
+            type="button"
+            class="free-cta__close"
+            :aria-label="t('common.close')"
+            @click="freeCtaMin = true"
+          >
+            ×
+          </button>
+          <p class="free-cta__note">{{ t('trip.freeEnd.note') }}</p>
+          <button type="button" class="free-cta__btn" @click="onFreeRestart">
+            {{ t('trip.freeEnd.cta') }}
+          </button>
+        </div>
+        <button
+          v-else
+          type="button"
+          class="free-cta-mini"
+          :aria-label="t('trip.freeEnd.cta')"
+          @click="freeCtaMin = false"
+        >
+          FREE
+        </button>
+      </template>
     </template>
 
     <Teleport to="body">
@@ -146,6 +171,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import CameraFrame from '@/components/CameraFrame.vue'
 import ShutterAnimation from '@/components/ShutterAnimation.vue'
@@ -158,6 +185,7 @@ import CorkboardGallery from '@/components/CorkboardGallery.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import { processCapture, blobToObjectUrl } from '@/lib/imagePipeline'
 import { composePolaroid } from '@/lib/composePolaroid'
+import { gradePhotoBlob } from '@/lib/polaroidTone'
 import type { FilterMode } from '@/lib/filterMode'
 import {
   createMember,
@@ -172,6 +200,9 @@ import {
   uploadPhoto,
 } from '@/lib/tripApi'
 import type { AppMode, DateFormat, RevealedPhoto, ShootState, Trip } from '@/types'
+
+const { t } = useI18n()
+const router = useRouter()
 
 const props = defineProps<{
   tripId: string
@@ -199,6 +230,8 @@ const shutterDone = ref(false)
 const processedBlob = ref<Blob | null>(null)
 /** Composed polaroid JPEG (frame + filter + comment). Uploaded as-is. */
 const composedBlob = ref<Blob | null>(null)
+/** Filter-only 3:4 JPEG (no frame). Uploaded alongside for frameless saves. */
+const photoOnlyBlob = ref<Blob | null>(null)
 const previewUrl = ref<string | null>(null)
 const comment = ref('')
 const filterMode = ref<FilterMode>('orange')
@@ -217,6 +250,8 @@ const galleryAnimateDrop = ref(false)
 const showRevealDialog = ref(false)
 /** First visit intro — once per trip via localStorage. */
 const showIntroDialog = ref(false)
+/** FREE 誘導バナーの最小化状態（×で右上のアイコンに畳む） */
+const freeCtaMin = ref(false)
 const showNicknameDialog = ref(false)
 
 function boardRevealedKey(tripId: string) {
@@ -316,14 +351,14 @@ async function boot() {
   try {
     const data = await fetchTrip(props.tripId)
     if (!data) {
-      bootError.value = '旅が見つかりません'
+      bootError.value = t('trip.notFound')
       return
     }
     trip.value = data
     syncModeFromTrip()
   } catch (e) {
     console.error(e)
-    bootError.value = '旅情報の取得に失敗しました'
+    bootError.value = t('trip.loadFailed')
   } finally {
     bootLoading.value = false
   }
@@ -362,7 +397,7 @@ async function loadGallery(options: { preview?: boolean } = {}) {
     } catch (refreshError) {
       console.error(refreshError)
     }
-    galleryError.value = '写真の取得に失敗しました'
+    galleryError.value = t('trip.photosLoadFailed')
   } finally {
     galleryLoading.value = false
   }
@@ -376,8 +411,8 @@ async function onCapture(file: File) {
   shootState.value = 'shutter'
   sendError.value = null
   composedBlob.value = null
+  photoOnlyBlob.value = null
   comment.value = ''
-  // Keep filterMode from the camera screen so preview matches what was set.
   capturedAt.value = new Date()
   try {
     const processed = await processCapture(file)
@@ -389,7 +424,7 @@ async function onCapture(file: File) {
   } catch (e) {
     console.error(e)
     processing.value = false
-    showToast('写真の処理に失敗しました')
+    showToast(t('trip.processFailed'))
     resetToIdle()
   }
 }
@@ -411,7 +446,7 @@ async function goConfirm() {
   if (!processedBlob.value) return
   const trimmed = comment.value.trim().slice(0, 30)
   if (commentRequired.value && !trimmed) {
-    showToast('コメントを入力してください')
+    showToast(t('trip.commentNeeded'))
     return
   }
   // Capture mode at click time — must match what PhotoPreview just showed.
@@ -419,20 +454,29 @@ async function goConfirm() {
   sendError.value = null
   composeBusy.value = true
   try {
-    const composed = await composePolaroid(
-      processedBlob.value,
-      trimmed,
-      modeAtConfirm,
-      capturedAt.value,
-      dateFormat.value,
-    )
+    const [composed, photoOnly] = await Promise.all([
+      composePolaroid(
+        processedBlob.value,
+        trimmed,
+        modeAtConfirm,
+        capturedAt.value,
+        dateFormat.value,
+      ),
+      modeAtConfirm === 'none'
+        ? Promise.resolve(processedBlob.value)
+        : gradePhotoBlob(processedBlob.value, modeAtConfirm, { grain: true }).catch((e) => {
+            console.error('photo-only grade failed', e)
+            return null
+          }),
+    ])
     composedBlob.value = composed
+    photoOnlyBlob.value = photoOnly
     revokePreview()
     previewUrl.value = blobToObjectUrl(composed)
     shootState.value = 'confirm'
   } catch (e) {
     console.error(e)
-    showToast('写真の合成に失敗しました')
+    showToast(t('trip.composeFailed'))
   } finally {
     composeBusy.value = false
   }
@@ -441,6 +485,7 @@ async function goConfirm() {
 function backToPreview() {
   // Restore the non-composed 3:4 preview so the user can edit the comment.
   composedBlob.value = null
+  photoOnlyBlob.value = null
   revokePreview()
   if (processedBlob.value) {
     previewUrl.value = blobToObjectUrl(processedBlob.value)
@@ -461,6 +506,7 @@ async function onSubmit() {
     await uploadPhoto({
       tripId: trip.value.id,
       blob,
+      rawBlob: photoOnlyBlob.value,
       comment: trimmed,
       rotation: randomRotation(),
       memberId: showNicknames.value ? memberId.value : null,
@@ -475,7 +521,7 @@ async function onSubmit() {
     console.error(e)
     // Stay on confirm with photo intact — no fade-out on failure.
     shootState.value = 'confirm'
-    sendError.value = '送信に失敗しました。もう一度お試しください。'
+    sendError.value = t('trip.sendFailed')
   }
 }
 
@@ -533,7 +579,7 @@ async function onNicknameConfirm(nickname: string) {
     showNicknameDialog.value = false
   } catch (e) {
     console.error(e)
-    showToast(e instanceof Error ? e.message : '名前の保存に失敗しました')
+    showToast(e instanceof Error ? e.message : t('dialog.nickname.saveFailed'))
   } finally {
     nickBusy.value = false
   }
@@ -544,6 +590,7 @@ function resetToIdle() {
   shutterDone.value = false
   processedBlob.value = null
   composedBlob.value = null
+  photoOnlyBlob.value = null
   comment.value = ''
   filterMode.value = 'orange'
   sendError.value = null
@@ -552,7 +599,6 @@ function resetToIdle() {
 
 onMounted(() => {
   void boot()
-  window.addEventListener('pagehide', onPageHide)
 })
 
 watch(
@@ -567,28 +613,34 @@ function freeTokenKey(slug: string) {
   return `shiori.free.${slug}`
 }
 
-function onPageHide() {
+/**
+ * FREE のお試し終了。pagehide での即削除はやめた（タブ切替・BFCache でも
+ * 発火してデモ中に trip が消えるため）— 明示操作のここだけで消す。
+ * 放置分は TTL（2h）+ purge-expired-trips が回収する。
+ */
+async function onFreeRestart() {
   const t = trip.value
-  if (!t || t.plan_id !== 'free' || !t.slug) return
-  let token = ''
-  try {
-    token = sessionStorage.getItem(freeTokenKey(t.slug)) ?? ''
-  } catch {
-    return
-  }
-  if (!token) return
-  void deleteFreeTrip(t.slug, token).then(() => {
+  if (t?.plan_id === 'free' && t.slug) {
+    let token = ''
     try {
-      sessionStorage.removeItem(freeTokenKey(t.slug))
+      token = sessionStorage.getItem(freeTokenKey(t.slug)) ?? ''
     } catch {
       /* ignore */
     }
-  })
+    if (token) {
+      try {
+        await deleteFreeTrip(t.slug, token)
+        sessionStorage.removeItem(freeTokenKey(t.slug))
+      } catch (e) {
+        // 消せなくても作成画面へ。slug 重複は作成側が表示する
+        console.error(e)
+      }
+    }
+  }
+  void router.push('/create')
 }
 
 onBeforeUnmount(() => {
-  window.removeEventListener('pagehide', onPageHide)
-  onPageHide()
   revokePreview()
 })
 </script>
@@ -616,7 +668,8 @@ onBeforeUnmount(() => {
 .nick-chip {
   position: absolute;
   top: calc(12px + var(--safe-top, 0px));
-  right: 16px;
+  /* 右上のグローバル言語スイッチャーを避ける */
+  right: 64px;
   z-index: 5;
   max-width: 42%;
   overflow: hidden;
@@ -644,7 +697,7 @@ onBeforeUnmount(() => {
 
 .debug-toggle {
   position: fixed;
-  top: max(10px, env(safe-area-inset-top));
+  top: calc(48px + var(--safe-top, 0px));
   right: 10px;
   z-index: 10001;
   display: flex;
@@ -684,6 +737,84 @@ onBeforeUnmount(() => {
 
 .boot-loader {
   padding: 120px 0;
+}
+
+.free-cta {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: min(62%, 260px);
+  padding: 12px 34px 12px 14px;
+  border-radius: 14px;
+  background: rgba(248, 247, 244, 0.94);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(60, 50, 40, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.free-cta__close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.free-cta-mini {
+  position: fixed;
+  top: calc(12px + var(--safe-top, 0px));
+  /* 右上のグローバル言語スイッチャーを避ける */
+  right: 60px;
+  z-index: 10000;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(248, 247, 244, 0.92);
+  color: var(--accent, #bd5825);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: 0 2px 8px rgba(60, 50, 40, 0.16);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.free-cta__note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.free-cta__btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent, #bd5825);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .flow {

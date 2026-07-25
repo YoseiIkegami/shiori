@@ -6,7 +6,7 @@
  */
 
 import { addMonochromeGrain, applyPolaroidTone } from '@/lib/polaroidTone'
-import type { FilterMode } from '@/lib/filterMode'
+import { getFilterDef, type FilterMode } from '@/lib/filterMode'
 import { classicTheme } from '@/themes/classic'
 import type { DateFormat } from '@/types'
 
@@ -221,7 +221,7 @@ export async function composePolaroid(
   ctx.drawImage(img, FRAME_MARGIN, FRAME_MARGIN, PHOTO_WIDTH, PHOTO_HEIGHT)
 
   // 3–4) Optional light film treatment — photo rect only.
-  if (filterMode === 'orange' || filterMode === 'blue') {
+  if (getFilterDef(filterMode).tone) {
     applyPolaroidTone(ctx, FRAME_MARGIN, FRAME_MARGIN, PHOTO_WIDTH, PHOTO_HEIGHT, filterMode)
     addMonochromeGrain(ctx, FRAME_MARGIN, FRAME_MARGIN, PHOTO_WIDTH, PHOTO_HEIGHT)
   }

@@ -6,13 +6,12 @@
 
     <section class="intro">
       <p class="brand display-type">{{ t('home.brand') }}</p>
+      <p class="brand-sub">{{ t('home.brandSub') }}</p>
       <h1 class="display-type">{{ t('home.headline') }}</h1>
-      <p class="lead">{{ t('home.tagline') }}</p>
     </section>
 
     <div class="home-footer">
       <router-link class="flow-btn primary" to="/create">{{ t('home.cta') }}</router-link>
-      <p class="plan">{{ priceLine }}</p>
       <nav class="legal-links" aria-label="legal">
         <router-link to="/terms">{{ t('common.legal.terms') }}</router-link>
         <span aria-hidden="true">·</span>
@@ -20,28 +19,15 @@
         <span aria-hidden="true">·</span>
         <router-link to="/legal">{{ t('common.legal.tokusho') }}</router-link>
       </nav>
-      <div class="lang">
-        <button type="button" class="lang-btn" :class="{ active: locale === 'ja' }" @click="setLocale('ja')">
-          {{ t('common.langJa') }}
-        </button>
-        <span aria-hidden="true">·</span>
-        <button type="button" class="lang-btn" :class="{ active: locale === 'en' }" @click="setLocale('en')">
-          {{ t('common.langEn') }}
-        </button>
-      </div>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HowToSlideshow from '@/components/HowToSlideshow.vue'
-import { setLocale } from '@/i18n'
-import { tripPlanPriceLine } from '@/lib/tripPlan'
 
-const { t, locale } = useI18n()
-const priceLine = computed(() => tripPlanPriceLine('standard'))
+const { t } = useI18n()
 </script>
 
 <style scoped>
@@ -66,7 +52,7 @@ const priceLine = computed(() => tripPlanPriceLine('standard'))
 }
 
 .brand {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: clamp(1.7rem, 6.5vw, 2.2rem);
   font-weight: 500;
   letter-spacing: 0.14em;
@@ -74,21 +60,23 @@ const priceLine = computed(() => tripPlanPriceLine('standard'))
   color: var(--ink-brown);
 }
 
+.brand-sub {
+  margin: 6px 0 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 h1 {
   margin: 0;
   font-size: clamp(1.15rem, 4.6vw, 1.4rem);
   font-weight: 500;
-  line-height: 1.55;
+  line-height: 1.65;
   letter-spacing: 0.03em;
   color: var(--ink-brown);
-}
-
-.lead {
-  margin: 8px 0 0;
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
+  white-space: pre-line;
 }
 
 .home-footer {
@@ -100,13 +88,6 @@ h1 {
   display: grid;
   place-items: center;
   text-decoration: none;
-}
-
-.plan {
-  margin: 10px 0 0;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.76rem;
 }
 
 .legal-links {
@@ -125,31 +106,7 @@ h1 {
   text-decoration: none;
 }
 
-.legal-links span,
-.lang span {
+.legal-links span {
   color: #c4beb5;
-}
-
-.lang {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  font-size: 0.72rem;
-}
-
-.lang-btn {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  cursor: pointer;
-}
-
-.lang-btn.active {
-  color: var(--ink-brown);
-  font-weight: 700;
 }
 </style>

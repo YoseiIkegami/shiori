@@ -11,7 +11,7 @@
 | `report-photo` | anon invoke | 通報 → `is_hidden=true` |
 | `purge-expired-trips` | `x-cron-secret`（任意） | 期限切れ trip の Storage + DB 削除 |
 
-デプロイ:
+デプロイ（**ユーザー依頼時のみ**。ルールは [`environments.md`](./environments.md)）:
 
 ```bash
 npx supabase functions deploy create-trip-checkout

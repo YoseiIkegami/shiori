@@ -37,6 +37,8 @@ export type RevealedPhoto = {
   rotation: number | null
   created_at: string
   url: string
+  /** Filter-only 3:4 JPEG (no frame / comment / date). Missing on legacy photos. */
+  raw_url?: string | null
   nickname?: string | null
   member_id?: string | null
 }

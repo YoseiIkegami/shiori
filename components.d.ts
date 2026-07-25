@@ -13,6 +13,7 @@ declare module 'vue' {
     FilmCountPicker: typeof import('./src/components/FilmCountPicker.vue')['default']
     HowToSlideshow: typeof import('./src/components/HowToSlideshow.vue')['default']
     IntroDialog: typeof import('./src/components/IntroDialog.vue')['default']
+    LangSwitcher: typeof import('./src/components/LangSwitcher.vue')['default']
     LegalPageShell: typeof import('./src/components/LegalPageShell.vue')['default']
     MoyoLoading: typeof import('./src/components/MoyoLoading.vue')['default']
     NicknameDialog: typeof import('./src/components/NicknameDialog.vue')['default']

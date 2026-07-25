@@ -1,39 +1,72 @@
 <template>
-  <main class="success flow-page flow-shell">
+  <main class="success flow-page flow-shell" :class="{ 'has-flow-bottom': paid }">
     <MoyoLoading v-if="loading" :size="64" />
 
     <van-empty v-else-if="error" image="error" :description="error" />
 
     <template v-else-if="result">
       <div class="success-heading">
-        <h1>{{ paid ? '旅のリンクができました' : '決済を確認しています' }}</h1>
+        <span v-if="paid" class="done-mark" aria-hidden="true">✓</span>
+        <h1>{{ paid ? t('success.titlePaid') : t('success.titlePending') }}</h1>
       </div>
 
-      <p v-if="!paid" class="lead">しばらくしてから再読み込みしてください</p>
+      <p v-if="!paid" class="lead">{{ t('success.pendingLead') }}</p>
 
       <template v-if="paid">
-        <p class="trip-name">{{ result.slug }}</p>
+        <p class="trip-name display-type">{{ result.slug }}</p>
 
-        <section class="share-section">
-          <button type="button" class="flow-btn primary" @click="shareTrip">リンクを送る</button>
-          <button type="button" class="secondary" @click="copy(shareUrl)">リンクをコピー</button>
-          <details class="qr-details">
-            <summary>QRコードを表示</summary>
-            <QrCode :url="shareUrl" :size="180" />
-          </details>
-        </section>
+        <ol class="how">
+          <li>
+            <span class="how-num" aria-hidden="true">1</span>
+            <div class="how-body">
+              <p class="how-title">{{ t('success.how1') }}</p>
+              <p class="how-note">{{ t('success.how1Note') }}</p>
+            </div>
+          </li>
+          <li>
+            <span class="how-num" aria-hidden="true">2</span>
+            <div class="how-body">
+              <p class="how-title">{{ t('success.how2') }}</p>
+            </div>
+          </li>
+          <li>
+            <span class="how-num" aria-hidden="true">3</span>
+            <div class="how-body">
+              <p class="how-title">{{ t('success.how3') }}</p>
+            </div>
+          </li>
+        </ol>
 
-        <details class="organizer-details">
-          <summary>設定を開く</summary>
-          <div class="organizer-body">
-            <p class="organizer-note">{{ ORGANIZER_EMAIL_HINT }}</p>
-            <p class="organizer-note">幹事用リンクはブックマークにも保存してください</p>
-            <button type="button" class="secondary" @click="copy(manageUrl)">設定リンクをコピー</button>
-            <a class="organizer-link" :href="manageUrl">設定ページを開く</a>
+        <details class="fold">
+          <summary>{{ t('success.otherShare') }}</summary>
+          <div class="fold-body">
+            <button type="button" class="secondary" @click="copy(shareUrl)">
+              {{ t('success.copyLink') }}
+            </button>
+            <QrCode :url="shareUrl" :size="168" />
           </div>
         </details>
 
-        <router-link class="shoot-link" :to="`/t/${result.slug}`">撮影をはじめる</router-link>
+        <details class="fold">
+          <summary>{{ t('success.settings') }}</summary>
+          <div class="fold-body">
+            <p class="fold-note">{{ t('success.emailHint') }}</p>
+            <p class="fold-note">{{ t('success.bookmark') }}</p>
+            <button type="button" class="secondary" @click="copy(manageUrl)">
+              {{ t('success.copyManage') }}
+            </button>
+            <a class="organizer-link" :href="manageUrl">{{ t('success.openManage') }}</a>
+          </div>
+        </details>
+
+        <div class="flow-bottom">
+          <button type="button" class="flow-btn primary" @click="shareTrip">
+            {{ t('success.sendLink') }}
+          </button>
+          <router-link class="shoot-link" :to="`/t/${result.slug}`">
+            {{ t('success.startShooting') }}
+          </router-link>
+        </div>
       </template>
     </template>
   </main>
@@ -41,14 +74,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import QrCode from '@/components/QrCode.vue'
 import { fetchCheckoutResult } from '@/lib/tripApi'
 
-/** Swap to「設定リンクはメールにも送信しました」when Resend is live. */
-const ORGANIZER_EMAIL_HINT = '設定リンクはメールにも送信予定です'
+const { t } = useI18n()
 
 const route = useRoute()
 const loading = ref(true)
@@ -75,9 +108,9 @@ const manageUrl = computed(() =>
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    showToast('コピーしました')
+    showToast(t('common.copied'))
   } catch {
-    showToast('コピーに失敗しました')
+    showToast(t('common.copyFailed'))
   }
 }
 
@@ -87,7 +120,7 @@ async function shareTrip() {
     try {
       await navigator.share({
         title: 'SHIORI',
-        text: '旅の写真、一緒に残そう',
+        text: t('manage.shareText'),
         url: shareUrl.value,
       })
       return
@@ -121,7 +154,7 @@ onMounted(async () => {
 
   const sessionId = String(route.query.session_id ?? '')
   if (!sessionId) {
-    error.value = 'セッションが見つかりません'
+    error.value = t('success.noSession')
     loading.value = false
     return
   }
@@ -129,7 +162,7 @@ onMounted(async () => {
     result.value = await fetchCheckoutResult(sessionId)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof Error ? e.message : '結果の取得に失敗しました'
+    error.value = e instanceof Error ? e.message : t('success.resultFailed')
   } finally {
     loading.value = false
   }
@@ -140,23 +173,34 @@ onMounted(async () => {
 .success {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  text-align: center;
-  padding-top: 18px;
+  gap: 20px;
+  padding-top: 26px;
 }
 
 .success-heading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding-top: 8px;
+  gap: 14px;
+  text-align: center;
+}
+
+.done-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-soft, #f5e3d6);
+  color: var(--accent);
+  font-size: 1.3rem;
+  font-weight: 700;
 }
 
 h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--ink-brown);
@@ -164,83 +208,112 @@ h1 {
 
 .lead {
   margin: 0;
+  text-align: center;
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
 .trip-name {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.45rem;
+  text-align: center;
+  font-size: 1.5rem;
   font-weight: 500;
   color: var(--ink-brown);
   word-break: break-all;
 }
 
-.share-section {
+.how {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 18px 16px;
+  border-radius: 12px;
+  background: var(--paper-cream, #fbf7ef);
+  border: 1px solid #eee5d7;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 8px;
+  gap: 16px;
+}
+
+.how li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.how-num {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.how-body {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.how-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.how-note {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.fold {
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.fold summary {
+  cursor: pointer;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fold-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 4px 0 18px;
+}
+
+.fold-note {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.fold-body :deep(.qr-code) {
+  margin: 6px auto 0;
 }
 
 .secondary {
   min-height: 44px;
   border: 0;
-  padding: 12px;
+  padding: 0;
   background: transparent;
   font: inherit;
   font-size: 0.84rem;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.qr-details {
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  text-align: left;
-}
-
-.qr-details summary {
-  cursor: pointer;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-}
-
-.qr-details :deep(.qr-code) {
-  margin: 18px auto 0;
-}
-
-.organizer-details {
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  text-align: left;
-}
-
-.organizer-details summary {
-  cursor: pointer;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
   font-weight: 700;
-  color: var(--text);
-}
-
-.organizer-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px 0 4px;
-}
-
-.organizer-note {
-  margin: 0;
-  font-size: 0.76rem;
+  color: var(--accent);
+  cursor: pointer;
 }
 
 .organizer-link {
@@ -253,13 +326,15 @@ h1 {
 }
 
 .shoot-link {
-  margin-top: 8px;
-  color: var(--text-muted);
-  font-size: 0.82rem;
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
   text-decoration: none;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 </style>

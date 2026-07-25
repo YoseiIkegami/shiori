@@ -1,8 +1,8 @@
 <template>
   <div class="nick-dialog" role="dialog" aria-modal="true" aria-labelledby="nick-title">
     <div class="nick-card">
-      <h2 id="nick-title" class="nick-title">あなたの名前</h2>
-      <p class="nick-body">12文字まで</p>
+      <h2 id="nick-title" class="nick-title">{{ t('dialog.nickname.title') }}</h2>
+      <p class="nick-body">{{ t('dialog.nickname.hint') }}</p>
       <input
         ref="inputEl"
         v-model="local"
@@ -10,13 +10,13 @@
         type="text"
         maxlength="12"
         autocomplete="nickname"
-        placeholder="なまえ"
+        :placeholder="t('dialog.nickname.placeholder')"
         :disabled="busy"
         @keydown.enter.prevent="onConfirm"
       />
       <p v-if="error" class="nick-err">{{ error }}</p>
       <button type="button" class="nick-ok" :disabled="busy" @click="onConfirm">
-        {{ busy ? '保存中…' : 'OK' }}
+        {{ busy ? t('dialog.nickname.saving') : t('common.ok') }}
       </button>
     </div>
   </div>
@@ -24,6 +24,9 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   initial?: string
@@ -53,7 +56,7 @@ function onConfirm() {
   if (props.busy) return
   const name = local.value.trim()
   if (!name) {
-    error.value = '名前を入力してください'
+    error.value = t('dialog.nickname.required')
     return
   }
   error.value = null

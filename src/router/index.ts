@@ -46,6 +46,11 @@ const router = createRouter({
       component: TripPage,
       props: true,
     },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/pages/NotFoundPage.vue'),
+    },
   ],
 })
 

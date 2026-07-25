@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
 
     const { data: photosRaw, error: photosError } = await supabase
       .from('photos')
-      .select('id, trip_id, storage_path, comment, rotation, created_at, member_id')
+      .select('id, trip_id, storage_path, raw_path, comment, rotation, created_at, member_id')
       .eq('trip_id', trip.id)
       .eq('is_hidden', false)
       .order('created_at', { ascending: true })
@@ -143,6 +143,7 @@ Deno.serve(async (req) => {
       id: string
       trip_id: string
       storage_path: string
+      raw_path: string | null
       comment: string
       rotation: number | null
       created_at: string
@@ -175,6 +176,7 @@ Deno.serve(async (req) => {
         id: string
         trip_id: string
         storage_path: string
+        raw_path: string | null
         comment: string
         rotation: number | null
         created_at: string
@@ -188,6 +190,17 @@ Deno.serve(async (req) => {
           console.error('signed url error', photo.storage_path, signError)
         }
 
+        let rawUrl: string | null = null
+        if (photo.raw_path) {
+          const { data: rawSigned, error: rawSignError } = await supabase.storage
+            .from('trip-photos')
+            .createSignedUrl(photo.raw_path, SIGNED_URL_EXPIRES_SEC)
+          if (rawSignError) {
+            console.error('raw signed url error', photo.raw_path, rawSignError)
+          }
+          rawUrl = rawSigned?.signedUrl ?? null
+        }
+
         return {
           id: photo.id,
           trip_id: photo.trip_id,
@@ -197,6 +210,7 @@ Deno.serve(async (req) => {
           member_id: photo.member_id ?? null,
           nickname: photo.member_id ? nicknameById.get(photo.member_id) ?? null : null,
           url: signed?.signedUrl ?? null,
+          raw_url: rawUrl,
         }
       }),
     )

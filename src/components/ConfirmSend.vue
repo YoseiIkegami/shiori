@@ -5,10 +5,10 @@
     :class="{ 'is-fading': fadingOut }"
   >
     <!-- imageUrl is already the composed polaroid JPEG (frame + comment baked in) -->
-    <img class="composed" :src="imageUrl" alt="確認" />
+    <img class="composed" :src="imageUrl" alt="" />
 
     <template v-if="!fadingOut">
-      <p class="ask">この思い出を残しますか？</p>
+      <p class="ask">{{ t('confirm.ask') }}</p>
 
       <van-notice-bar
         v-if="errorMessage"
@@ -27,9 +27,11 @@
           :loading="sending"
           @click="emit('submit')"
         >
-          {{ errorMessage ? 'もう一度送信' : '思い出を送る' }}
+          {{ errorMessage ? t('confirm.retry') : t('confirm.send') }}
         </van-button>
-        <van-button block round :disabled="sending" @click="emit('back')">戻る</van-button>
+        <van-button block round :disabled="sending" @click="emit('back')">
+          {{ t('confirm.back') }}
+        </van-button>
       </div>
     </template>
   </div>
@@ -37,6 +39,9 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   imageUrl: string
@@ -106,6 +111,12 @@ onBeforeUnmount(() => {
   max-width: 390px;
   margin: 0 auto;
   padding: 38px 4px 20px;
+  /* 主ボタンを画面下端に寄せる（page-shell の上下パディング分を差し引く） */
+  min-height: calc(100dvh - 28px - var(--safe-top) - var(--safe-bottom));
+}
+
+.actions {
+  margin-top: auto;
 }
 
 .confirm.is-fading {

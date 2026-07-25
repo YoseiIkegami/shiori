@@ -2,7 +2,7 @@
   <div class="preview">
     <div class="polaroid">
       <div class="photo-wrap">
-        <img :src="displayUrl" alt="プレビュー" />
+        <img :src="displayUrl" alt="" />
         <time class="photo-date">{{ stampText }}</time>
       </div>
       <button
@@ -11,42 +11,34 @@
         :class="{ handwriting: !!localComment.trim(), placeholder: !localComment.trim() }"
         @click="openSheet"
       >
-        {{ localComment.trim() || 'タップしてコメントを入力' }}
+        {{ localComment.trim() || t('preview.commentPlaceholder') }}
       </button>
     </div>
 
-    <div class="edit-panel">
+    <!-- Instagram風フィルター選択: 横スクロールのサムネイルストリップ -->
+    <div class="filter-strip" role="radiogroup" :aria-label="t('preview.filter')">
       <button
+        v-for="f in FILTERS"
+        :key="f.id"
+        :ref="(el) => setFilterItemRef(f.id, el)"
         type="button"
-        class="filter-toggle-btn btn-control"
-        :class="`filter-${filterMode}`"
-        :aria-label="filterAriaLabel"
-        @click="cycleFilter"
+        role="radio"
+        class="filter-item"
+        :class="{ selected: filterMode === f.id }"
+        :aria-checked="filterMode === f.id"
+        @click="selectFilter(f.id)"
       >
-        <svg class="pict" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="9" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
-          <circle cx="15" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
-          <circle cx="12" cy="15" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
-          <line
-            v-if="filterMode === 'none'"
-            class="none-slash"
-            x1="5"
-            y1="5"
-            x2="19"
-            y2="19"
-            stroke="currentColor"
-            stroke-width="2.4"
-            stroke-linecap="round"
-          />
-        </svg>
+        <span class="filter-name">{{ t(`filter.${f.id}`) }}</span>
+        <span class="filter-thumb">
+          <img v-if="thumbs[f.id]" :src="thumbs[f.id]" alt="" draggable="false" />
+        </span>
       </button>
-      <small>フィルター</small>
     </div>
 
     <div class="actions">
-      <button type="button" class="soft-button secondary" @click="emit('retake')">撮り直す</button>
-      <button type="button" class="soft-button primary" :disabled="!canProceed" @click="onNext">
-        仕上がりを確認
+      <button type="button" class="soft-button secondary" @click="emit('retake')">{{ t('preview.retake') }}</button>
+      <button type="button" class="soft-button primary" @click="onNext">
+        {{ canProceed ? t('preview.next') : t('preview.needComment') }}
       </button>
     </div>
 
@@ -59,15 +51,15 @@
       close-on-click-overlay
       :style="{ padding: '20px 16px calc(20px + env(safe-area-inset-bottom))' }"
     >
-      <p class="sheet-title">ひとことメッセージ</p>
-      <p class="sheet-hint">30文字まで</p>
+      <p class="sheet-title">{{ t('preview.sheetTitle') }}</p>
+      <p class="sheet-hint">{{ t('preview.sheetHint') }}</p>
       <textarea
         ref="textareaEl"
         v-model="localComment"
         class="sheet-input handwriting"
         maxlength="30"
         rows="3"
-        placeholder="旅のひとこまをひとこと"
+        :placeholder="t('preview.sheetPlaceholder')"
         @input="onInput"
       />
       <div class="sheet-meta">
@@ -75,19 +67,21 @@
         <span class="counter">{{ localComment.length }}/30</span>
       </div>
       <van-button block round type="primary" color="#bd5825" @click="onSheetDone">
-        入力完了
+        {{ t('preview.sheetDone') }}
       </van-button>
     </van-popup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { showToast } from 'vant'
+import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatCaptureStamp } from '@/lib/composePolaroid'
-import { nextFilterMode, type FilterMode } from '@/lib/filterMode'
-import { gradePhotoBlob } from '@/lib/polaroidTone'
+import { FILTERS, type FilterMode } from '@/lib/filterMode'
+import { buildFilterThumbnails, gradePhotoBlob } from '@/lib/polaroidTone'
 import type { DateFormat } from '@/types'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -122,11 +116,35 @@ const canProceed = computed(
 const stampText = computed(() =>
   formatCaptureStamp(props.capturedAt ?? new Date(), props.dateFormat),
 )
-const filterAriaLabel = computed(() => {
-  if (props.filterMode === 'orange') return 'フィルター: オレンジ'
-  if (props.filterMode === 'blue') return 'フィルター: ブルー'
-  return 'フィルター: なし'
-})
+
+/** Picker thumbnails (data URLs) — rebuilt when the source photo changes. */
+const thumbs = ref<Partial<Record<FilterMode, string>>>({})
+let thumbSeq = 0
+const filterItemEls = new Map<FilterMode, HTMLElement>()
+
+function setFilterItemRef(id: FilterMode, el: Element | ComponentPublicInstance | null) {
+  if (el instanceof HTMLElement) filterItemEls.set(id, el)
+  else filterItemEls.delete(id)
+}
+
+async function refreshThumbnails() {
+  const seq = ++thumbSeq
+  try {
+    const sourceBlob = await fetch(props.imageUrl).then((r) => r.blob())
+    const built = await buildFilterThumbnails(
+      sourceBlob,
+      FILTERS.map((f) => f.id),
+    )
+    if (seq === thumbSeq) thumbs.value = built
+  } catch (e) {
+    console.error('filter thumbnails failed', e)
+  }
+}
+
+function selectFilter(id: FilterMode) {
+  emit('update:filterMode', id)
+  filterItemEls.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+}
 
 function revokeGradedUrl() {
   if (gradedObjectUrl) {
@@ -177,8 +195,17 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => props.imageUrl,
+  () => {
+    void refreshThumbnails()
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   gradeSeq += 1
+  thumbSeq += 1
   revokeGradedUrl()
 })
 
@@ -186,10 +213,6 @@ function onInput() {
   const next = localComment.value.slice(0, 30)
   localComment.value = next
   emit('update:comment', next)
-}
-
-function cycleFilter() {
-  emit('update:filterMode', nextFilterMode(props.filterMode))
 }
 
 async function openSheet() {
@@ -205,8 +228,8 @@ function onSheetDone() {
 
 function onNext() {
   if (!canProceed.value) {
+    // ラベルが「コメントを入力」なので、そのまま入力シートを開く
     void openSheet()
-    showToast('コメントを入力してください')
     return
   }
   emit('update:comment', localComment.value.trim().slice(0, 30))
@@ -222,6 +245,12 @@ function onNext() {
   max-width: 390px;
   margin: 0 auto;
   padding: 42px 4px 18px;
+  /* 主ボタンを画面下端に寄せる（page-shell の上下パディング分を差し引く） */
+  min-height: calc(100dvh - 28px - var(--safe-top) - var(--safe-bottom));
+}
+
+.actions {
+  margin-top: auto;
 }
 
 .polaroid {
@@ -292,48 +321,67 @@ function onNext() {
   gap: 10px;
 }
 
-.edit-panel {
+/* Instagram の編集画面と同じ構成: 名前ラベル + サムネイルの横スクロール */
+.filter-strip {
+  display: flex;
+  gap: 10px;
+  margin: 0 -4px;
+  padding: 4px 12px 8px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.filter-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-item {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  padding: 0 4px;
-  color: var(--text-muted);
-  font-size: 0.65rem;
-}
-
-.filter-toggle-btn {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
+  align-items: center;
+  gap: 6px;
   padding: 0;
   border: 0;
-  color: var(--text);
-  background: #fff;
+  background: transparent;
   cursor: pointer;
+  scroll-snap-align: center;
 }
 
-.filter-toggle-btn.filter-orange {
-  background: #d6602a;
-  color: #fff;
+.filter-name {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
-.filter-toggle-btn.filter-blue {
-  background: #5b7a9e;
-  color: #fff;
+.filter-item.selected .filter-name {
+  color: var(--accent);
+  font-weight: 700;
 }
 
-.filter-toggle-btn.filter-none {
-  background: #fff;
-  color: #7a6f57;
-  border: 1px solid #ccc;
-}
-
-.filter-toggle-btn .pict {
-  width: 22px;
-  height: 22px;
+.filter-thumb {
   display: block;
+  width: 64px;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--surface-deep, #ece7dd);
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.filter-item.selected .filter-thumb {
+  border-color: var(--accent);
+}
+
+.filter-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  -webkit-user-drag: none;
 }
 
 .soft-button {

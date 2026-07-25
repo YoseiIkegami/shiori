@@ -1,44 +1,56 @@
 <template>
   <main class="legal flow-page flow-shell">
-    <header class="legal-head">
-      <router-link class="back" to="/" aria-label="戻る">←</router-link>
+    <header class="legal-head flow-head">
+      <button type="button" class="back" :aria-label="t('common.back')" @click="goBack">←</button>
       <h1 class="display-type">{{ title }}</h1>
     </header>
     <article class="legal-body">
       <slot />
     </article>
+    <!-- replace: 法務ページ間の移動で履歴を積まない（戻る一発で遷移元へ） -->
     <nav class="legal-nav">
-      <router-link to="/terms">利用規約</router-link>
-      <router-link to="/privacy">プライバシー</router-link>
-      <router-link to="/legal">特商法</router-link>
+      <router-link replace to="/terms">{{ t('common.legal.terms') }}</router-link>
+      <router-link replace to="/privacy">{{ t('common.legal.privacy') }}</router-link>
+      <router-link replace to="/legal">{{ t('common.legal.tokusho') }}</router-link>
     </nav>
   </main>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+
+const { t } = useI18n()
+
 defineProps<{
   title: string
 }>()
+
+const router = useRouter()
+
+function goBack() {
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.push('/')
+  }
+}
 </script>
 
 <style scoped>
-.legal-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
 .back {
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
   margin: -6px 0 0 -6px;
+  border: 0;
   border-radius: 8px;
   color: var(--text-muted);
   text-decoration: none;
   font-size: 1.1rem;
+  background: transparent;
+  cursor: pointer;
 }
 
 .legal-head h1 {

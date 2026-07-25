@@ -5,6 +5,7 @@ alwaysApply: true
 
 # SHIORI デプロイ・環境ルール
 
+手順の正本: `docs/environments.md`  
 フロントは同一ドメイン上の SPA だが、旅（trip）ごとに URL が分かれる。運用上の環境定義は次のとおり。
 
 ## 本番（運用済み）— 自動デプロイ禁止

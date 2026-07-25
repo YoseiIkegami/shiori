@@ -56,6 +56,16 @@
 - [x] `/terms` `/privacy` `/legal` 下書き + ホーム/作成フッターリンク
 - [x] Cloudflare / CSAM 手順: [`docs/cloudflare-csam.md`](./cloudflare-csam.md)
 
+### UX・i18n 磨き込み（2026-07-25）
+
+- [x] 作成フロー再構成（1P=名前+設定 / 2P=プラン選択）
+- [x] FREE 旅ボードに課金導線バナー
+- [x] 法務ページの戻る（履歴があれば `router.back()`）
+- [x] 全 UI 文言の i18n 化・スイッチャー/検出の `SUPPORTED_LOCALES` 駆動化
+- [x] トップ: タグライン/価格行の削除・スライド磨き込み
+- [x] 保存: 選択保存モード + 「写真だけ（フレーム・日付なし）」バリエーション（`photos.raw_path` 並行保存）
+- [x] 404 ページ（迷子コンパス）
+
 ## 未着手・準備中
 
 ### その他

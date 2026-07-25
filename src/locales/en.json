@@ -2,23 +2,22 @@
   "common": {
     "back": "Back",
     "close": "Close",
+    "ok": "OK",
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy",
+    "language": "Language",
     "legal": {
       "terms": "Terms",
       "privacy": "Privacy",
       "tokusho": "Legal notice"
-    },
-    "langJa": "日本語",
-    "langEn": "English"
+    }
   },
   "home": {
     "brand": "SHIORI",
-    "headline": "Rest while you travel. Open together when it ends.",
-    "tagline": "Photos that stay sealed until then.",
+    "brandSub": "Instant Camera",
+    "headline": "Rest while you travel.\nOpen together when it ends.",
     "cta": "Start a trip",
-    "priceLine": "{photos} shots · {days} days {price}",
     "howto": {
       "label": "How it works",
       "slidesLabel": "Slides",
@@ -42,14 +41,16 @@
   },
   "create": {
     "title": "Start a trip",
-    "stepName": "Choose a name",
-    "stepSettings": "Trip settings",
+    "stepSetup": "Name & settings",
+    "stepPlan": "Choose a plan",
     "nameLabel": "Trip name",
+    "namePlaceholder": "e.g. natsu-ibuki",
     "nameHint": "3–30 characters, letters, numbers, hyphens",
     "suggest": "Suggest",
     "next": "Next",
     "checking": "Checking name…",
     "nameOk": "This name is available",
+    "checkFailed": "Could not check the name",
     "planLabel": "Plan",
     "commentRequired": "Require a caption",
     "showNicknames": "Show photographer names",
@@ -57,7 +58,14 @@
     "preparing": "Preparing…",
     "submitFree": "Start for free",
     "submitPaid": "Start for {price}",
-    "freeNote": "Deleted soon after you leave"
+    "freeNote": "Deleted soon after you leave",
+    "createFailed": "Could not create the trip",
+    "noCheckoutUrl": "Could not get the checkout URL"
+  },
+  "slug": {
+    "format": "3–30 characters, letters, numbers, hyphens",
+    "reserved": "This name cannot be used",
+    "taken": "This name is already taken"
   },
   "plan": {
     "free": {
@@ -69,12 +77,156 @@
       "summary": "50 shots · 7 days"
     },
     "plus": {
-      "name": "Plus",
+      "name": "Premium",
       "summary": "500 shots · keeps forever"
     }
   },
+  "trip": {
+    "notFound": "Trip not found",
+    "loadFailed": "Could not load the trip",
+    "pending": "This trip is not ready yet",
+    "photosLoadFailed": "Could not load photos",
+    "processFailed": "Could not process the photo",
+    "composeFailed": "Could not compose the photo",
+    "sendFailed": "Could not send. Please try again.",
+    "commentNeeded": "Please add a caption",
+    "freeEnd": {
+      "note": "That's the free trial. These photos will disappear soon.",
+      "cta": "Start a trip"
+    }
+  },
+  "camera": {
+    "label": "Camera",
+    "idleHint": "Press the shutter to shoot",
+    "remainPrefix": "",
+    "remainSuffix": "left",
+    "shutter": "Take a photo",
+    "switchCamera": "Switch camera",
+    "toFront": "Switched to front camera",
+    "toBack": "Switched to back camera"
+  },
+  "filter": {
+    "none": "Normal",
+    "orange": "Warm",
+    "cream": "Cream",
+    "retro": "Retro",
+    "blue": "Cool",
+    "fade": "Fade",
+    "mono": "Mono"
+  },
+  "preview": {
+    "commentPlaceholder": "Tap to add a caption",
+    "filter": "Filter",
+    "retake": "Retake",
+    "next": "Review",
+    "sheetTitle": "A short note",
+    "sheetHint": "Up to 30 characters",
+    "sheetPlaceholder": "One line about this moment",
+    "sheetDone": "Done",
+    "needComment": "Add a caption"
+  },
+  "confirm": {
+    "ask": "Keep this memory?",
+    "send": "Send it",
+    "retry": "Try again",
+    "back": "Back"
+  },
+  "dialog": {
+    "intro": {
+      "title": "Save your memories",
+      "body": "Photos stay sealed until the trip ends"
+    },
+    "reveal": {
+      "title": "All shots are taken",
+      "body": "Time to look back on the trip"
+    },
+    "nickname": {
+      "title": "Your name",
+      "hint": "Up to 12 characters",
+      "placeholder": "Name",
+      "saving": "Saving…",
+      "required": "Please enter a name",
+      "saveFailed": "Could not save the name"
+    }
+  },
+  "board": {
+    "empty": "No photos yet",
+    "retry": "Retry",
+    "saveAll": "Save all",
+    "openShare": "Open share",
+    "select": "Select",
+    "cancelSelect": "Cancel",
+    "saveSelected": "Save {n}",
+    "saveSelectedConfirm": "Save the {n} selected photos?",
+    "save": "Save",
+    "saveFramed": "Save as is",
+    "savePhotoOnly": "Photo only (no frame or date)",
+    "report": "Report",
+    "reportConfirm": "Report this photo?",
+    "reported": "Reported",
+    "reportFailed": "Could not report",
+    "imageFailed": "Could not load the image",
+    "saveFailed": "Could not save",
+    "downloadStarted": "Download started",
+    "needsRetap": "Ready. Tap once more"
+  },
   "manage": {
+    "share": "Share",
+    "revealed": "Revealed",
+    "photosStat": "{count} / {max} shots",
+    "shareLink": "Share link",
+    "copyLink": "Copy link",
+    "showQr": "Show QR code",
+    "settings": "Trip settings",
+    "displayName": "Display name",
     "filmCount": "Film count",
-    "filmFixed": "{n} shots"
+    "filmFixed": "{n} shots",
+    "dateLabel": "Date display",
+    "dateNone": "None",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Could not save",
+    "endSection": "End",
+    "endBtn": "End the trip and open the photos",
+    "ending": "Working…",
+    "endConfirmTitle": "End the trip?",
+    "endConfirmMsg": "The photos will be revealed. This cannot be undone.",
+    "endDone": "Revealed",
+    "endFailed": "Could not end the trip",
+    "tokenRequired": "A token is required",
+    "loadFailed": "Could not load",
+    "opFailed": "Operation failed",
+    "shareText": "Let's keep our trip photos together"
+  },
+  "success": {
+    "titlePaid": "Your trip link is ready",
+    "titlePending": "Confirming payment",
+    "pendingLead": "Please reload in a moment",
+    "how1": "Send the link to everyone",
+    "how1Note": "Photos gather inside this link. Share it as is",
+    "how2": "Shoot during the trip",
+    "how3": "When it ends, open together",
+    "otherShare": "Other ways to share",
+    "sendLink": "Send the link",
+    "copyLink": "Copy link",
+    "settings": "Organizer menu",
+    "emailHint": "The settings link will also be emailed",
+    "bookmark": "Bookmark the organizer link too",
+    "copyManage": "Copy settings link",
+    "openManage": "Open settings page",
+    "startShooting": "Start shooting",
+    "noSession": "Session not found",
+    "resultFailed": "Could not get the result"
+  },
+  "notFound": {
+    "caption": "Where are we…?",
+    "title": "You've wandered off the map",
+    "body": "This page may have vanished mid-journey, or never existed at all.",
+    "cta": "Back to home"
+  },
+  "member": {
+    "nameRequired": "Please enter a name",
+    "createFailed": "Could not create the member"
   }
 }

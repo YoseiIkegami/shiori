@@ -5,18 +5,20 @@
     <van-empty v-else-if="error" image="error" :description="error" />
 
     <template v-else-if="trip">
-      <header class="head">
-        <h1>{{ trip.name }}</h1>
-        <p class="slug">{{ trip.slug }}</p>
+      <header class="head flow-head">
+        <div>
+          <h1>{{ trip.name }}</h1>
+          <p class="slug">{{ trip.slug }}</p>
+        </div>
       </header>
 
       <section class="status-block">
         <div class="status-row">
           <p class="stat">
-            {{ trip.photos_count }} / {{ trip.max_photos }} 枚
-            <span v-if="trip.is_revealed" class="badge">解禁済み</span>
+            {{ t('manage.photosStat', { count: trip.photos_count, max: trip.max_photos }) }}
+            <span v-if="trip.is_revealed" class="badge">{{ t('manage.revealed') }}</span>
           </p>
-          <button type="button" class="flow-btn share-btn" @click="shareTrip">共有する</button>
+          <button type="button" class="flow-btn share-btn" @click="shareTrip">{{ t('manage.share') }}</button>
         </div>
         <div class="progress" aria-hidden="true">
           <span class="progress-fill" :style="{ width: `${progressPct}%` }" />
@@ -26,11 +28,11 @@
       <hr class="flow-divider" />
 
       <section class="share-meta">
-        <p class="flow-label">共有リンク</p>
+        <p class="flow-label">{{ t('manage.shareLink') }}</p>
         <p class="share-url">{{ shareUrlShort }}</p>
-        <button type="button" class="secondary" @click="copy(shareUrl)">リンクをコピー</button>
+        <button type="button" class="secondary" @click="copy(shareUrl)">{{ t('manage.copyLink') }}</button>
         <details class="qr-details">
-          <summary>QRコードを表示</summary>
+          <summary>{{ t('manage.showQr') }}</summary>
           <QrCode :url="shareUrl" :size="168" />
         </details>
       </section>
@@ -38,46 +40,46 @@
       <hr class="flow-divider" />
 
       <form class="form" @submit.prevent="onSave">
-        <h2 class="flow-section-title">旅の設定</h2>
+        <h2 class="flow-section-title">{{ t('manage.settings') }}</h2>
 
         <label class="field">
-          <span class="flow-label">表示名</span>
+          <span class="flow-label">{{ t('manage.displayName') }}</span>
           <input v-model="form.name" class="flow-input" type="text" maxlength="60" />
         </label>
 
         <div class="field">
           <span class="flow-label">{{ tFilmLabel }}</span>
-          <p class="film-fixed">{{ trip.max_photos }} 枚</p>
+          <p class="film-fixed">{{ t('manage.filmFixed', { n: trip.max_photos }) }}</p>
         </div>
 
         <div class="field switch-row">
-          <span class="flow-label">ひとことを必須にする</span>
+          <span class="flow-label">{{ t('create.commentRequired') }}</span>
           <van-switch v-model="form.comment_required" size="22px" active-color="#bd5825" />
         </div>
 
-        <div class="field switch-row">
-          <span class="flow-label">撮った人の名前を表示</span>
-          <van-switch v-model="form.show_nicknames" size="22px" active-color="#bd5825" />
-        </div>
-
         <label class="field">
-          <span class="flow-label">日付の表示</span>
+          <span class="flow-label">{{ t('manage.dateLabel') }}</span>
           <button type="button" class="flow-input picker-like" @click="formatOpen = true">
             {{ dateFormatLabel }}
           </button>
         </label>
 
+        <div class="field switch-row">
+          <span class="flow-label">{{ t('create.showNicknames') }}</span>
+          <van-switch v-model="form.show_nicknames" size="22px" active-color="#bd5825" />
+        </div>
+
         <p v-if="saveMsg" class="msg">{{ saveMsg }}</p>
         <button class="flow-btn primary" type="submit" :disabled="saving">
-          {{ saving ? '保存中…' : '保存' }}
+          {{ saving ? t('manage.saving') : t('manage.save') }}
         </button>
       </form>
 
       <section v-if="!trip.is_revealed" class="danger-zone">
         <hr class="flow-divider" />
-        <h2 class="flow-section-title">終了</h2>
+        <h2 class="flow-section-title">{{ t('manage.endSection') }}</h2>
         <button class="end-btn" type="button" :disabled="ending" @click="onEnd">
-          {{ ending ? '処理中…' : '旅を終了して写真を開く' }}
+          {{ ending ? t('manage.ending') : t('manage.endBtn') }}
         </button>
       </section>
     </template>
@@ -85,7 +87,7 @@
     <van-action-sheet
       v-model:show="formatOpen"
       :actions="formatActions"
-      cancel-text="閉じる"
+      :cancel-text="t('common.close')"
       close-on-click-action
       @select="onFormatSelect"
     />
@@ -94,12 +96,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import QrCode from '@/components/QrCode.vue'
 import { manageTripEnd, manageTripGet, manageTripUpdate, type ManageTrip } from '@/lib/tripApi'
 import type { DateFormat } from '@/types'
+
+const { t } = useI18n()
 
 const props = defineProps<{ slug: string }>()
 const route = useRoute()
@@ -116,20 +121,19 @@ const token = computed(() => String(route.query.token ?? ''))
 
 const form = reactive({
   name: '',
-  max_photos: 50,
   comment_required: true,
   show_nicknames: false,
   date_format: 'YY.M.D' as DateFormat,
 })
 
-const tFilmLabel = 'フィルムの枚数'
+const tFilmLabel = computed(() => t('manage.filmCount'))
 
-const formatActions = [
+const formatActions = computed(() => [
   { name: 'YY.M.D', value: 'YY.M.D' },
   { name: 'YYYY.M.D', value: 'YYYY.M.D' },
   { name: 'YY.M.D HH:mm', value: 'YY.M.D HH:mm' },
-  { name: 'なし', value: 'none' },
-]
+  { name: t('manage.dateNone'), value: 'none' },
+])
 
 const shareUrl = computed(() =>
   trip.value ? `${window.location.origin}/t/${trip.value.slug}` : '',
@@ -143,13 +147,12 @@ const progressPct = computed(() => {
 })
 
 const dateFormatLabel = computed(() => {
-  const hit = formatActions.find((a) => a.value === form.date_format)
+  const hit = formatActions.value.find((a) => a.value === form.date_format)
   return hit?.name ?? form.date_format
 })
 
 function syncForm(t: ManageTrip) {
   form.name = t.name
-  form.max_photos = t.max_photos
   form.comment_required = t.comment_required !== false
   form.show_nicknames = t.show_nicknames === true
   form.date_format = (t.date_format as DateFormat) || 'YY.M.D'
@@ -162,9 +165,9 @@ function onFormatSelect(action: { value: string }) {
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    showToast('コピーしました')
+    showToast(t('common.copied'))
   } catch {
-    showToast('コピーに失敗しました')
+    showToast(t('common.copyFailed'))
   }
 }
 
@@ -174,7 +177,7 @@ async function shareTrip() {
     try {
       await navigator.share({
         title: trip.value?.name ?? 'SHIORI',
-        text: '旅の写真、一緒に残そう',
+        text: t('manage.shareText'),
         url: shareUrl.value,
       })
       return
@@ -187,7 +190,7 @@ async function shareTrip() {
 
 async function boot() {
   if (!token.value) {
-    error.value = 'トークンが必要です'
+    error.value = t('manage.tokenRequired')
     loading.value = false
     return
   }
@@ -199,7 +202,7 @@ async function boot() {
     syncForm(t)
   } catch (e) {
     console.error(e)
-    error.value = e instanceof Error ? e.message : '読み込みに失敗しました'
+    error.value = e instanceof Error ? e.message : t('manage.loadFailed')
   } finally {
     loading.value = false
   }
@@ -212,18 +215,17 @@ async function onSave() {
   try {
     const updated = await manageTripUpdate(props.slug, token.value, {
       name: form.name,
-      max_photos: form.max_photos,
       comment_required: form.comment_required,
       show_nicknames: form.show_nicknames,
       date_format: form.date_format,
     })
     trip.value = updated
     syncForm(updated)
-    saveMsg.value = '保存しました'
-    showToast('保存しました')
+    saveMsg.value = t('manage.saved')
+    showToast(t('manage.saved'))
   } catch (e) {
     console.error(e)
-    showToast(e instanceof Error ? e.message : '保存に失敗しました')
+    showToast(e instanceof Error ? e.message : t('manage.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -233,8 +235,8 @@ async function onEnd() {
   if (!trip.value || ending.value || trip.value.is_revealed) return
   try {
     await showConfirmDialog({
-      title: '旅を終了しますか？',
-      message: '写真の山が解禁されます。この操作は取り消せません。',
+      title: t('manage.endConfirmTitle'),
+      message: t('manage.endConfirmMsg'),
     })
   } catch {
     return
@@ -242,10 +244,10 @@ async function onEnd() {
   ending.value = true
   try {
     trip.value = await manageTripEnd(props.slug, token.value)
-    showToast('解禁しました')
+    showToast(t('manage.endDone'))
   } catch (e) {
     console.error(e)
-    showToast(e instanceof Error ? e.message : '終了に失敗しました')
+    showToast(e instanceof Error ? e.message : t('manage.endFailed'))
   } finally {
     ending.value = false
   }

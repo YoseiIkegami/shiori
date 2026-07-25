@@ -1,5 +1,24 @@
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import type { RevealedPhoto, Trip } from '@/types'
 import { supabase, STORAGE_BUCKET } from '@/lib/supabase'
+import { i18n } from '@/i18n'
+
+/**
+ * supabase-js は非 2xx を「Edge Function returned a non-2xx status code」に
+ * 潰すため、レスポンス本文の {error} を取り出してユーザーに見せる。
+ */
+async function functionError(error: unknown, fallback: string): Promise<Error> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = await error.context.json()
+      if (typeof body?.error === 'string' && body.error) return new Error(body.error)
+    } catch {
+      /* body is not JSON */
+    }
+    return new Error(fallback)
+  }
+  return error instanceof Error ? error : new Error(fallback)
+}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -78,6 +97,8 @@ function generateUuid(): string {
 export async function uploadPhoto(params: {
   tripId: string
   blob: Blob
+  /** Filter-only photo without the polaroid frame. Enables frameless saves. */
+  rawBlob?: Blob | null
   comment: string
   rotation: number
   memberId?: string | null
@@ -96,12 +117,29 @@ export async function uploadPhoto(params: {
     throw uploadError
   }
 
+  let rawPath: string | null = null
+  if (params.rawBlob) {
+    rawPath = `${params.tripId}/${fileId}_raw.jpg`
+    const { error: rawError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(rawPath, params.rawBlob, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      })
+    if (rawError) {
+      // Frameless variant is best-effort — the composed photo is the product.
+      console.error('raw upload failed', rawError)
+      rawPath = null
+    }
+  }
+
   const row: Record<string, unknown> = {
     trip_id: params.tripId,
     storage_path: storagePath,
     comment: params.comment.slice(0, 30),
     rotation: params.rotation,
   }
+  if (rawPath) row.raw_path = rawPath
   if (params.memberId) row.member_id = params.memberId
 
   const { error: insertError } = await supabase.from('photos').insert(row)
@@ -133,13 +171,13 @@ export function storeMemberId(tripId: string, memberId: string): void {
 
 export async function createMember(tripId: string, nickname: string): Promise<string> {
   const trimmed = nickname.trim().slice(0, 12)
-  if (!trimmed) throw new Error('名前を入力してください')
+  if (!trimmed) throw new Error(i18n.global.t('member.nameRequired'))
   const { data, error } = await supabase.rpc('create_member', {
     p_trip_id: tripId,
     p_nickname: trimmed,
   })
   if (error) throw error
-  if (!data) throw new Error('メンバーの作成に失敗しました')
+  if (!data) throw new Error(i18n.global.t('member.createFailed'))
   const id = data as string
   storeMemberId(tripId, id)
   return id
@@ -147,7 +185,7 @@ export async function createMember(tripId: string, nickname: string): Promise<st
 
 export async function updateMemberNickname(memberId: string, nickname: string): Promise<void> {
   const trimmed = nickname.trim().slice(0, 12)
-  if (!trimmed) throw new Error('名前を入力してください')
+  if (!trimmed) throw new Error(i18n.global.t('member.nameRequired'))
   const { error } = await supabase.rpc('update_member_nickname', {
     p_id: memberId,
     p_nickname: trimmed,
@@ -172,11 +210,11 @@ export async function fetchRevealedPhotos(
   })
 
   if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : '写真の取得に失敗しました')
+    throw new Error(typeof data.error === 'string' ? data.error : i18n.global.t('trip.photosLoadFailed'))
   }
 
   if (error) {
-    throw error
+    throw await functionError(error, i18n.global.t('trip.photosLoadFailed'))
   }
 
   return data as RevealResponse
@@ -203,10 +241,10 @@ export async function createTripCheckout(
     },
   })
   if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : '発行に失敗しました')
+    throw new Error(typeof data.error === 'string' ? data.error : i18n.global.t('create.createFailed'))
   }
-  if (error) throw error
-  if (!data?.url) throw new Error('Checkout URL が取得できませんでした')
+  if (error) throw await functionError(error, i18n.global.t('create.createFailed'))
+  if (!data?.url) throw new Error(i18n.global.t('create.noCheckoutUrl'))
   return {
     url: data.url as string,
     free: Boolean(data.free),
@@ -220,9 +258,9 @@ export async function deleteFreeTrip(slug: string, token: string): Promise<void>
     body: { action: 'delete_free', slug, token },
   })
   if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : '削除に失敗しました')
+    throw new Error(typeof data.error === 'string' ? data.error : 'delete_free failed')
   }
-  if (error) throw error
+  if (error) throw await functionError(error, 'delete_free failed')
 }
 
 export async function fetchCheckoutResult(sessionId: string): Promise<{
@@ -235,9 +273,9 @@ export async function fetchCheckoutResult(sessionId: string): Promise<{
     body: { action: 'result', session_id: sessionId },
   })
   if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : '結果の取得に失敗しました')
+    throw new Error(typeof data.error === 'string' ? data.error : i18n.global.t('success.resultFailed'))
   }
-  if (error) throw error
+  if (error) throw await functionError(error, i18n.global.t('success.resultFailed'))
   return data
 }
 
@@ -246,9 +284,9 @@ export type ManageTrip = Trip & { payment_status: string }
 async function manageTripInvoke(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('manage-trip', { body })
   if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : '操作に失敗しました')
+    throw new Error(typeof data.error === 'string' ? data.error : i18n.global.t('manage.opFailed'))
   }
-  if (error) throw error
+  if (error) throw await functionError(error, i18n.global.t('manage.opFailed'))
   return data
 }
 
@@ -276,7 +314,7 @@ export async function reportPhoto(photoId: string): Promise<void> {
     body: { photo_id: photoId },
   })
   if (data?.error) {
-    throw new Error(typeof data.error === 'string' ? data.error : '通報に失敗しました')
+    throw new Error(typeof data.error === 'string' ? data.error : i18n.global.t('board.reportFailed'))
   }
-  if (error) throw error
+  if (error) throw await functionError(error, i18n.global.t('board.reportFailed'))
 }

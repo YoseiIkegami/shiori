@@ -15,6 +15,7 @@
           v-for="(slide, i) in slides"
           :key="slide.id"
           class="slide"
+          :class="{ 'is-active': i === index }"
           :aria-hidden="i !== index"
         >
           <div class="polaroid" :class="`scene-${slide.id}`">
@@ -22,8 +23,8 @@
               <svg v-if="slide.id === 'shoot'" viewBox="0 0 120 140" class="illust">
                 <rect x="22" y="18" width="76" height="88" rx="4" fill="#fffdf8" stroke="#d8cfc2" />
                 <rect x="30" y="26" width="60" height="58" fill="url(#g1)" />
-                <circle cx="60" cy="52" r="14" fill="none" stroke="#fff" stroke-width="2.5" opacity="0.85" />
-                <circle cx="60" cy="52" r="5" fill="#fff" opacity="0.9" />
+                <circle class="lens-ring" cx="60" cy="52" r="14" fill="none" stroke="#fff" stroke-width="2.5" opacity="0.85" />
+                <circle class="lens-core" cx="60" cy="52" r="5" fill="#fff" opacity="0.9" />
                 <rect x="38" y="94" width="44" height="4" rx="2" fill="#e8dfd2" />
                 <defs>
                   <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
@@ -36,8 +37,10 @@
               <svg v-else-if="slide.id === 'seal'" viewBox="0 0 120 140" class="illust">
                 <rect x="18" y="28" width="84" height="78" rx="3" fill="#f3ebe0" stroke="#d8cfc2" />
                 <path d="M18 40 L60 68 L102 40" fill="none" stroke="#c4b5a0" stroke-width="2" />
-                <rect x="48" y="58" width="24" height="24" rx="12" fill="#bd5825" opacity="0.85" />
-                <path d="M54 70 L58 74 L66 64" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+                <g class="seal-badge">
+                  <rect x="48" y="58" width="24" height="24" rx="12" fill="#bd5825" opacity="0.85" />
+                  <path d="M54 70 L58 74 L66 64" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+                </g>
               </svg>
               <svg v-else viewBox="0 0 120 140" class="illust">
                 <g transform="translate(8 22) rotate(-8 28 36)">
@@ -49,8 +52,10 @@
                   <rect x="5" y="5" width="42" height="40" fill="#d4a67c" />
                 </g>
                 <g transform="translate(62 28) rotate(12 28 36)">
-                  <rect width="52" height="64" rx="3" fill="#fffdf8" stroke="#d8cfc2" />
-                  <rect x="5" y="5" width="42" height="40" fill="#879fab" />
+                  <g class="fan-sway">
+                    <rect width="52" height="64" rx="3" fill="#fffdf8" stroke="#d8cfc2" />
+                    <rect x="5" y="5" width="42" height="40" fill="#879fab" />
+                  </g>
                 </g>
               </svg>
             </div>
@@ -98,7 +103,7 @@ function go(i: number) {
 }
 
 function tick() {
-  if (Date.now() < pausedUntil.value) return
+  if (tracking || Date.now() < pausedUntil.value) return
   index.value = (index.value + 1) % slides.length
 }
 
@@ -116,6 +121,7 @@ function onPointerMove(e: PointerEvent) {
 function onPointerUp(e: PointerEvent) {
   if (!tracking) return
   tracking = false
+  pausedUntil.value = Date.now() + 8000
   const dx = e.clientX - startX
   if (Math.abs(dx) < 40) return
   go(index.value + (dx < 0 ? 1 : -1))
@@ -153,6 +159,16 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  opacity: 0.35;
+  transform: scale(0.92);
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide.is-active {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .polaroid {
@@ -234,12 +250,73 @@ onBeforeUnmount(() => {
   left: 50%;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: 999px;
   background: #d5cfc5;
   transform: translate(-50%, -50%);
+  transition:
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.3s ease;
 }
 
 .dot.active::after {
+  width: 20px;
   background: var(--accent);
+}
+
+.lens-ring {
+  transform-origin: 60px 52px;
+  animation: howto-lens 3.6s ease-in-out infinite;
+}
+
+.seal-badge {
+  transform-origin: 60px 70px;
+  animation: howto-seal 3.2s ease-in-out infinite;
+}
+
+.fan-sway {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: howto-fan 4.2s ease-in-out infinite;
+}
+
+@keyframes howto-lens {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes howto-seal {
+  0%,
+  86%,
+  100% {
+    transform: scale(1);
+  }
+  92% {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes howto-fan {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-1.5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lens-ring,
+  .seal-badge,
+  .fan-sway {
+    animation: none;
+  }
 }
 </style>

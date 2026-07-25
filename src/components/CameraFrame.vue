@@ -1,5 +1,5 @@
 <template>
-  <section class="camera-screen" aria-label="撮影画面">
+  <section class="camera-screen" :aria-label="t('camera.label')">
     <div class="camera-body">
       <div class="device-body">
         <span class="charge-indicator" aria-hidden="true" title="チャージ"></span>
@@ -8,49 +8,27 @@
           <div class="finder">
             <!-- Static idle well (no live stream). File capture opens OS camera on shutter. -->
             <div class="finder-fallback">
-              <p>シャッターを押して撮影</p>
+              <p>{{ t('camera.idleHint') }}</p>
             </div>
           </div>
 
           <div class="film-status">
             <div class="counter-container" aria-live="polite">
-              <span class="count-label">あと</span>
+              <span v-if="t('camera.remainPrefix')" class="count-label">{{ t('camera.remainPrefix') }}</span>
               <div ref="odometerEl" class="odometer numeric">{{ remaining }}</div>
-              <span class="count-label">枚</span>
+              <span v-if="t('camera.remainSuffix')" class="count-label">{{ t('camera.remainSuffix') }}</span>
             </div>
           </div>
         </div>
 
         <div class="control-row">
-          <button
-            type="button"
-            class="side-btn filter-toggle-btn btn-control"
-            :class="`filter-${filterMode}`"
-            :aria-label="filterAriaLabel"
-            @click="cycleFilter"
-          >
-            <svg class="pict" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="9" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
-              <circle cx="15" cy="10" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
-              <circle cx="12" cy="15" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2" />
-              <line
-                v-if="filterMode === 'none'"
-                class="none-slash"
-                x1="5"
-                y1="5"
-                x2="19"
-                y2="19"
-                stroke="currentColor"
-                stroke-width="2.4"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
+          <!-- フィルターは撮影後のプレビューで選ぶ（Instagram式）。シャッター中央維持のスペーサー -->
+          <span class="side-spacer" aria-hidden="true"></span>
 
           <button
             class="shutter-button btn-control"
             type="button"
-            aria-label="写真を撮る"
+            :aria-label="t('camera.shutter')"
             :disabled="capturing"
             @click="onShutter"
           >
@@ -60,7 +38,7 @@
           <button
             type="button"
             class="side-btn camera-switch-btn btn-control"
-            aria-label="カメラ切替"
+            :aria-label="t('camera.switchCamera')"
             @click="toggleFacing"
           >
             <svg class="pict" viewBox="0 0 24 24" aria-hidden="true">
@@ -113,21 +91,21 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import Odometer from 'odometer'
 import 'odometer/themes/odometer-theme-default.css'
-import { nextFilterMode, type FilterMode } from '@/lib/filterMode'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   tripName: string
   photosCount: number
   maxPhotos: number
-  filterMode: FilterMode
 }>()
 
 const emit = defineEmits<{
   capture: [file: File]
-  'update:filterMode': [value: FilterMode]
 }>()
 
 type Facing = 'environment' | 'user'
@@ -140,19 +118,9 @@ let odometer: InstanceType<typeof Odometer> | null = null
 
 const remaining = computed(() => Math.max(0, props.maxPhotos - props.photosCount))
 
-const filterAriaLabel = computed(() => {
-  if (props.filterMode === 'orange') return 'フィルター: オレンジ'
-  if (props.filterMode === 'blue') return 'フィルター: ブルー'
-  return 'フィルター: なし'
-})
-
-function cycleFilter() {
-  emit('update:filterMode', nextFilterMode(props.filterMode))
-}
-
 function toggleFacing() {
   facingMode.value = facingMode.value === 'environment' ? 'user' : 'environment'
-  showToast(facingMode.value === 'user' ? 'インカメラに切替' : 'アウトカメラに切替')
+  showToast(facingMode.value === 'user' ? t('camera.toFront') : t('camera.toBack'))
 }
 
 function onShutter() {
@@ -341,21 +309,9 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.filter-toggle-btn.filter-orange {
-  background: #d6602a;
-  color: #fff;
-}
-
-.filter-toggle-btn.filter-blue {
-  background: #5b7a9e;
-  color: #fff;
-}
-
-.filter-toggle-btn.filter-none {
-  background: #fff;
-  color: #7a6f57;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  border: 1px solid #ccc;
+.side-spacer {
+  width: 48px;
+  height: 48px;
 }
 
 .pict {

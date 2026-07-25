@@ -35,7 +35,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
   },
 }
 
-export const DEFAULT_PLAN_ID: PlanId = 'standard'
+export const DEFAULT_PLAN_ID: PlanId = 'free'
 export const DEFAULT_MAX_PHOTOS = PLANS.standard.maxPhotos
 export const RETENTION_DAYS = PLANS.standard.retentionDays ?? 7
 export const FILM_COUNT_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const
@@ -58,32 +58,12 @@ export function formatPlanPrice(
   return i18n.global.n(major, 'currency', currency === 'jpy' ? 'ja' : 'en')
 }
 
-export function tripPlanPriceLine(
-  planId: PlanId = 'standard',
-  currency: CheckoutCurrency = currencyForLocale(),
-): string {
-  const plan = PLANS[planId]
-  const price = formatPlanPrice(planId, currency)
-  if (planId === 'free') return price
-  const days = plan.retentionDays ?? 0
-  return i18n.global.t('home.priceLine', {
-    photos: plan.maxPhotos,
-    days: days || '∞',
-    price,
-  })
-}
-
 export function tripPriceButtonLabel(
   planId: PlanId,
   currency: CheckoutCurrency = currencyForLocale(),
 ): string {
   if (planId === 'free') return i18n.global.t('create.submitFree')
   return i18n.global.t('create.submitPaid', { price: formatPlanPrice(planId, currency) })
-}
-
-/** @deprecated Prefer plan-based pricing. */
-export function tripIncludesLine(maxPhotos = DEFAULT_MAX_PHOTOS, days = RETENTION_DAYS): string {
-  return `フィルム${maxPhotos}枚・${days}日保存`
 }
 
 export function filmCountSelectOptions(current?: number, planId?: PlanId): number[] {

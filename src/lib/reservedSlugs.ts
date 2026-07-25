@@ -1,3 +1,5 @@
+import { i18n } from '@/i18n'
+
 /** Route / product reserved words — blocked for NEW trip slugs only. */
 export const RESERVED_SLUGS = [
   'create',
@@ -19,17 +21,13 @@ export const SLUG_MIN = 3
 export const SLUG_MAX = 30
 export const SLUG_RE = /^[a-z0-9-]{3,30}$/
 
-/** Format error. */
-export const SLUG_FORMAT_MESSAGE = '英数字とハイフンで 3〜30文字'
+export function slugFormatMessage(): string {
+  return i18n.global.t('slug.format')
+}
 
-/** Reserved-word error. */
-export const SLUG_RESERVED_MESSAGE = 'この名前は使えません'
-
-/** Duplicate slug error. */
-export const SLUG_TAKEN_MESSAGE = 'この名前はすでに使われています'
-
-/** @deprecated Prefer SLUG_TAKEN_MESSAGE or SLUG_FORMAT_MESSAGE. */
-export const SLUG_UNAVAILABLE_MESSAGE = SLUG_TAKEN_MESSAGE
+export function slugTakenMessage(): string {
+  return i18n.global.t('slug.taken')
+}
 
 export function normalizeSlug(raw: string): string {
   return raw.trim().toLowerCase()
@@ -43,7 +41,7 @@ export function isReservedSlug(slug: string): boolean {
 export function validateSlugFormat(raw: string): string | null {
   const slug = normalizeSlug(raw)
   if (!slug) return null
-  if (!SLUG_RE.test(slug)) return SLUG_FORMAT_MESSAGE
-  if (isReservedSlug(slug)) return SLUG_RESERVED_MESSAGE
+  if (!SLUG_RE.test(slug)) return slugFormatMessage()
+  if (isReservedSlug(slug)) return i18n.global.t('slug.reserved')
   return null
 }

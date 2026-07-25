@@ -1,14 +1,18 @@
 <template>
   <div class="intro-dialog" role="dialog" aria-modal="true" aria-labelledby="intro-title">
     <div class="intro-card">
-      <h2 id="intro-title" class="intro-title">思い出を残しましょう</h2>
-      <p class="intro-body">撮った写真は、旅の終わりに</p>
-      <button type="button" class="intro-ok" @click="emit('confirm')">OK</button>
+      <h2 id="intro-title" class="intro-title">{{ t('dialog.intro.title') }}</h2>
+      <p class="intro-body">{{ t('dialog.intro.body') }}</p>
+      <button type="button" class="intro-ok" @click="emit('confirm')">{{ t('common.ok') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 const emit = defineEmits<{
   confirm: []
 }>()

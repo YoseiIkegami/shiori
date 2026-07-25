@@ -1,14 +1,18 @@
 <template>
   <div class="reveal-dialog" role="dialog" aria-modal="true" aria-labelledby="reveal-title">
     <div class="reveal-card">
-      <h2 id="reveal-title" class="reveal-title">写真を撮り切りました</h2>
-      <p class="reveal-body">旅の思い出を振り返りましょう</p>
-      <button type="button" class="reveal-ok" @click="emit('confirm')">OK</button>
+      <h2 id="reveal-title" class="reveal-title">{{ t('dialog.reveal.title') }}</h2>
+      <p class="reveal-body">{{ t('dialog.reveal.body') }}</p>
+      <button type="button" class="reveal-ok" @click="emit('confirm')">{{ t('common.ok') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 const emit = defineEmits<{
   confirm: []
 }>()

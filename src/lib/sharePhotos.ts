@@ -12,8 +12,8 @@ export function sanitizeTripName(tripName: string): string {
   return trimmed.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40)
 }
 
-export function photoFilename(tripName: string, index: number): string {
-  return `${sanitizeTripName(tripName)}_${String(index + 1).padStart(2, '0')}.jpg`
+export function photoFilename(tripName: string, index: number, suffix = ''): string {
+  return `${sanitizeTripName(tripName)}_${String(index + 1).padStart(2, '0')}${suffix}.jpg`
 }
 
 function isUserAbort(error: unknown): boolean {
@@ -77,32 +77,6 @@ export type ShareResult =
   | { status: 'downloaded' }
   | { status: 'unsupported' }
 
-/** Share one file (PhotoSwipe save). Prefer share sheet → <a download> fallback. */
-export async function saveSinglePhoto(
-  imageUrl: string,
-  filename: string,
-  nickname?: string | null,
-): Promise<ShareResult> {
-  try {
-    const file = await fileFromUrl(imageUrl, filename, nickname)
-    if (canShareFiles([file])) {
-      try {
-        await navigator.share({ files: [file] })
-        return { status: 'shared' }
-      } catch (error) {
-        if (isUserAbort(error)) return { status: 'aborted' }
-        if (isGestureLost(error)) return { status: 'needs_retap', files: [file] }
-        console.warn('share failed, falling back to download', error)
-      }
-    }
-    downloadFallback(file)
-    return { status: 'downloaded' }
-  } catch (error) {
-    console.error('保存に失敗しました', error)
-    throw error
-  }
-}
-
 /** Share an already-prepared File list (second tap after gesture was lost). */
 export async function sharePreparedFiles(files: File[]): Promise<ShareResult> {
   if (!files.length) return { status: 'unsupported' }
@@ -139,27 +113,22 @@ export async function sharePreparedFiles(files: File[]): Promise<ShareResult> {
   return { status: 'shared' }
 }
 
-export async function buildPhotoFiles(
-  photos: Array<{ url: string; nickname?: string | null }>,
-  tripName: string,
-): Promise<File[]> {
-  return Promise.all(
-    photos.map((photo, index) =>
-      fileFromUrl(photo.url, photoFilename(tripName, index), photo.nickname),
-    ),
-  )
+export type SaveItem = {
+  url: string
+  filename: string
+  /** Baked onto the caption band — framed variant only. */
+  nickname?: string | null
 }
 
 /**
- * Prepare then share all photos. If the browser drops the user-gesture after
- * the long fetch, returns `needs_retap` with prepared files for an immediate
+ * Prepare then share photos. If the browser drops the user-gesture after the
+ * long fetch, returns `needs_retap` with prepared files for an immediate
  * second tap (no extra network).
  */
-export async function saveAllPhotos(
-  photos: Array<{ url: string; nickname?: string | null }>,
-  tripName: string,
-): Promise<ShareResult> {
-  if (!photos.length) return { status: 'unsupported' }
-  const files = await buildPhotoFiles(photos, tripName)
+export async function savePhotos(items: SaveItem[]): Promise<ShareResult> {
+  if (!items.length) return { status: 'unsupported' }
+  const files = await Promise.all(
+    items.map((item) => fileFromUrl(item.url, item.filename, item.nickname)),
+  )
   return sharePreparedFiles(files)
 }
