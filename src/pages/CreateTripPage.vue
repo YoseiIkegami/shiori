@@ -210,7 +210,7 @@ const submitLabel = computed(() => {
 })
 
 function planPriceLabel(id: PlanId) {
-  if (id === 'free') return t('plan.free.name')
+  if (id === 'free') return t('plan.free.price')
   return formatPlanPrice(id)
 }
 
