@@ -507,10 +507,6 @@ h1 {
   background: var(--surface-deep);
 }
 
-.plan-card.recommended {
-  /* Badge only — no orange border (conflicts with selected state). */
-}
-
 .plan-card.selected {
   border-color: var(--accent);
   background: var(--accent-soft);
