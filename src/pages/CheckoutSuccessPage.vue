@@ -135,7 +135,8 @@ import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import QrCode from '@/components/QrCode.vue'
 import { fetchCheckoutResult, storeFreeOrganizerToken } from '@/lib/tripApi'
-import { buildTripShareMessage } from '@/lib/shareMessage'
+import { buildTripShareMessageForLocale } from '@/lib/shareMessage'
+import { getLocale, type AppLocale } from '@/i18n'
 
 const { t } = useI18n()
 
@@ -152,11 +153,15 @@ const result = ref<{
   organizer_token: string
   payment_status: string
   plan_id?: string
+  share_locale?: AppLocale
 } | null>(null)
 
 const paid = computed(() => result.value?.payment_status === 'paid')
 const isFree = computed(() => result.value?.plan_id === 'free')
 
+const shareLocale = computed<AppLocale>(() =>
+  result.value?.share_locale === 'en' ? 'en' : result.value?.share_locale === 'ja' ? 'ja' : getLocale(),
+)
 /** Visible title on success — prefer display name over internal slug. */
 const TITLE_DISPLAY_MAX = 20
 
@@ -183,7 +188,7 @@ const shareUrl = computed(() =>
 )
 
 const shareMessage = computed(() =>
-  buildTripShareMessage(t('common.shareTitle'), t('common.shareBody'), shareUrl.value),
+  shareUrl.value ? buildTripShareMessageForLocale(shareLocale.value, shareUrl.value) : '',
 )
 
 const manageTo = computed(() => {
@@ -262,6 +267,7 @@ onMounted(async () => {
       organizer_token: freeToken,
       payment_status: 'paid',
       plan_id: 'free',
+      share_locale: getLocale(),
     }
     loading.value = false
     return

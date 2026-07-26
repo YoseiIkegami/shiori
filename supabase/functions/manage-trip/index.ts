@@ -32,7 +32,7 @@ const json = (body: unknown, status: number, headers: Record<string, string>) =>
 
 const TRIP_FIELDS =
   'id, slug, name, share_token, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
-  'show_nicknames, comment_required, date_format, expires_at, payment_status, ' +
+  'show_nicknames, comment_required, date_format, expires_at, payment_status, share_locale, ' +
   'organizer_email, organizer_email_sent_at, organizer_token'
 
 function publicTrip(trip: Record<string, unknown>) {
@@ -190,6 +190,11 @@ Deno.serve(async (req) => {
     if (typeof patch.comment_required === 'boolean') update.comment_required = patch.comment_required
     // 日付スタンプは常時OFF（互換のためカラムのみ更新可・値は none 固定）
     if ('date_format' in patch) update.date_format = 'none'
+    if (typeof patch.share_locale === 'string') {
+      const loc = patch.share_locale.trim().toLowerCase()
+      if (loc === 'ja' || loc === 'en') update.share_locale = loc
+      else return json({ error: 'invalid_json' }, 400, headers)
+    }
     if (typeof patch.organizer_email === 'string') {
       const email = normalizeEmail(patch.organizer_email)
       if (email && !email.includes('@')) return json({ error: 'email_invalid' }, 400, headers)

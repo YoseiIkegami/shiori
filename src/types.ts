@@ -21,6 +21,8 @@ export type Trip = {
   organizer_email?: string | null
   /** Last confirmation email send (ISO). Used for resend cooldown. */
   organizer_email_sent_at?: string | null
+  /** Language for share invite copy (independent of UI). */
+  share_locale?: 'ja' | 'en' | null
   theme_id?: string
   created_at?: string
 }

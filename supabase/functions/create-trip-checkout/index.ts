@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
 
     const { data: trip, error } = await supabase
       .from('trips')
-      .select('slug, name, share_token, organizer_token, payment_status')
+      .select('slug, name, share_token, organizer_token, payment_status, share_locale, plan_id')
       .eq('id', tripId)
       .maybeSingle()
 
@@ -268,6 +268,8 @@ Deno.serve(async (req) => {
         share_token: trip.share_token,
         organizer_token: trip.organizer_token,
         payment_status: trip.payment_status,
+        share_locale: trip.share_locale === 'en' ? 'en' : 'ja',
+        plan_id: trip.plan_id,
       },
       200,
       headers,
@@ -310,6 +312,8 @@ Deno.serve(async (req) => {
   const commentRequired = body.comment_required !== false
   const showNicknames = body.show_nicknames === true
   const dateFormat = 'none'
+  const localeRaw = String(body.locale ?? '').toLowerCase()
+  const shareLocale = localeRaw === 'en' ? 'en' : 'ja'
 
   if (planId === 'free') {
     const ttlHours = plan.freeTtlHours ?? 2
@@ -325,10 +329,11 @@ Deno.serve(async (req) => {
         comment_required: commentRequired,
         show_nicknames: showNicknames,
         date_format: dateFormat,
+        share_locale: shareLocale,
         payment_status: 'paid',
         expires_at: expiresAt,
       })
-      .select('id, slug, share_token, organizer_token')
+      .select('id, slug, share_token, organizer_token, share_locale')
       .single()
 
     if (insertError) {
@@ -371,6 +376,7 @@ Deno.serve(async (req) => {
     comment_required: commentRequired,
     show_nicknames: showNicknames,
     date_format: dateFormat,
+    share_locale: shareLocale,
     payment_status: 'pending',
   }
 
@@ -392,7 +398,6 @@ Deno.serve(async (req) => {
   const successBase = (body.origin as string) || origin
   const successUrl = `${successBase}/create/success?session_id={CHECKOUT_SESSION_ID}`
   const cancelUrl = `${successBase}/create`
-  const localeRaw = String(body.locale ?? '').toLowerCase()
   const checkoutLocale = localeRaw === 'en' || currency === 'usd' ? 'en' : 'ja'
 
   try {

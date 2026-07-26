@@ -23,6 +23,7 @@
 | `organizer_token` | text | 幹事認証用（UNIQUE） |
 | `organizer_email` | text | 連絡先（確認メール。Checkout 時に保存・設定で変更可） |
 | `organizer_email_sent_at` | timestamptz | 確認メール最終送信（再送クールダウン 60秒） |
+| `share_locale` | text | 共有文面の言語 `ja` / `en`（UI言語とは独立。設定で変更可） |
 | `created_at` | timestamptz | |
 
 ### バックフィル（既存 trip）

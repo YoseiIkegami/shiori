@@ -386,6 +386,8 @@ export async function fetchCheckoutResult(sessionId: string): Promise<{
   share_token: string
   organizer_token: string
   payment_status: string
+  share_locale?: 'ja' | 'en'
+  plan_id?: string
 }> {
   const { data, error } = await supabase.functions.invoke('create-trip-checkout', {
     body: { action: 'result', session_id: sessionId },

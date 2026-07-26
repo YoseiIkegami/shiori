@@ -101,6 +101,28 @@
           </button>
         </div>
 
+        <div class="field">
+          <span class="flow-label">{{ t('manage.shareLocale') }}</span>
+          <div class="locale-row" role="group" :aria-label="t('manage.shareLocale')">
+            <button
+              type="button"
+              class="locale-btn"
+              :class="{ active: form.share_locale === 'ja' }"
+              @click="form.share_locale = 'ja'"
+            >
+              {{ t('manage.shareLocaleJa') }}
+            </button>
+            <button
+              type="button"
+              class="locale-btn"
+              :class="{ active: form.share_locale === 'en' }"
+              @click="form.share_locale = 'en'"
+            >
+              {{ t('manage.shareLocaleEn') }}
+            </button>
+          </div>
+        </div>
+
         <div class="field switch-row">
           <span class="flow-label">{{ t('create.commentRequired') }}</span>
           <van-switch v-model="form.comment_required" size="22px" active-color="#bd5825" />
@@ -138,7 +160,8 @@ import { showConfirmDialog, showToast } from 'vant'
 import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import { manageTripEnd, manageTripGet, manageTripResendEmail, manageTripUpdate, tripPublicKey, type ManageTrip } from '@/lib/tripApi'
-import { buildTripShareMessage } from '@/lib/shareMessage'
+import { buildTripShareMessageForLocale, shareCopyParts } from '@/lib/shareMessage'
+import type { AppLocale } from '@/i18n'
 
 const { t } = useI18n()
 
@@ -194,6 +217,7 @@ const token = computed(() => String(route.query.token ?? ''))
 const form = reactive({
   name: '',
   organizer_email: '',
+  share_locale: 'ja' as AppLocale,
   comment_required: true,
   show_nicknames: false,
 })
@@ -202,9 +226,13 @@ const shareUrl = computed(() =>
   trip.value ? `${window.location.origin}/t/${tripPublicKey(trip.value)}` : '',
 )
 
+const shareLocale = computed<AppLocale>(() =>
+  form.share_locale === 'en' ? 'en' : 'ja',
+)
+
 const shareMessage = computed(() => {
   if (!shareUrl.value) return ''
-  return buildTripShareMessage(t('common.shareTitle'), t('common.shareBody'), shareUrl.value)
+  return buildTripShareMessageForLocale(shareLocale.value, shareUrl.value)
 })
 
 const progressPct = computed(() => {
@@ -217,9 +245,11 @@ const dirty = computed(() => {
   const baselineComment = trip.value.comment_required !== false
   const baselineNick = trip.value.show_nicknames === true
   const baselineEmail = (trip.value.organizer_email ?? '').trim().toLowerCase()
+  const baselineLocale: AppLocale = trip.value.share_locale === 'en' ? 'en' : 'ja'
   return (
     form.name.trim() !== trip.value.name ||
     form.organizer_email.trim().toLowerCase() !== baselineEmail ||
+    form.share_locale !== baselineLocale ||
     form.comment_required !== baselineComment ||
     form.show_nicknames !== baselineNick
   )
@@ -230,6 +260,7 @@ const canResend = computed(() => form.organizer_email.trim().includes('@'))
 function syncForm(row: ManageTrip) {
   form.name = row.name
   form.organizer_email = row.organizer_email ?? ''
+  form.share_locale = row.share_locale === 'en' ? 'en' : 'ja'
   form.comment_required = row.comment_required !== false
   form.show_nicknames = row.show_nicknames === true
   editingName.value = false
@@ -282,11 +313,12 @@ function goBack() {
 
 async function shareTrip() {
   if (!shareUrl.value) return
+  const parts = shareCopyParts(shareLocale.value)
   if (navigator.share) {
     try {
       await navigator.share({
-        title: t('common.shareTitle'),
-        text: t('common.shareBody'),
+        title: parts.title,
+        text: parts.text,
         url: shareUrl.value,
       })
       return
@@ -325,6 +357,7 @@ async function onSave() {
     const updated = await manageTripUpdate(props.slug, token.value, {
       name: form.name.trim() || trip.value.name,
       organizer_email: form.organizer_email.trim(),
+      share_locale: form.share_locale,
       comment_required: form.comment_required,
       show_nicknames: form.show_nicknames,
       date_format: 'none',
@@ -531,6 +564,29 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.locale-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.locale-btn {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.locale-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
 }
 
 .switch-row {
