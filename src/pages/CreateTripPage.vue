@@ -69,10 +69,11 @@
               type="button"
               role="radio"
               class="plan-card"
-              :class="{ selected: planId === id }"
+              :class="{ selected: planId === id, recommended: id === 'standard' }"
               :aria-checked="planId === id"
               @click="onSelectPlan(id)"
             >
+              <span v-if="id === 'standard'" class="plan-badge">{{ t('plan.recommend') }}</span>
               <span class="plan-name">{{ t(`plan.${id}.name`) }}</span>
               <span class="plan-summary">{{ t(`plan.${id}.summary`) }}</span>
               <span class="plan-price">{{ planPriceLabel(id) }}</span>
@@ -482,10 +483,11 @@ h1 {
 .plan-card {
   display: grid;
   grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   column-gap: 12px;
   row-gap: 2px;
   align-items: center;
+  position: relative;
   min-height: 68px;
   padding: 14px 16px;
   border: 1.5px solid var(--line);
@@ -505,6 +507,10 @@ h1 {
   background: var(--surface-deep);
 }
 
+.plan-card.recommended {
+  border-color: var(--accent);
+}
+
 .plan-card.selected {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -513,6 +519,20 @@ h1 {
 
 .plan-card.selected:active {
   background: var(--accent-soft);
+}
+
+.plan-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
 }
 
 .plan-name {
@@ -530,11 +550,15 @@ h1 {
 
 .plan-price {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 2 / span 2;
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+.plan-card:not(:has(.plan-badge)) .plan-price {
+  grid-row: 1 / span 2;
 }
 
 .switch-row {

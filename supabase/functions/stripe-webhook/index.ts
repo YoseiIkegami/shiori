@@ -5,8 +5,6 @@ import { sendOrganizerLinks } from '../_shared/organizerMail.ts'
 // Stripe calls this endpoint directly (no Supabase JWT) — verify_jwt must be false.
 // Idempotency is guaranteed by the unique index on orders.stripe_session_id.
 
-const RETENTION_DAYS_BASE = 7
-
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
@@ -82,12 +80,9 @@ Deno.serve(async (req) => {
 
   const patch: Record<string, unknown> = { payment_status: 'paid' }
   if (organizerEmail) patch.organizer_email = organizerEmail
+  // Standard retention starts at reveal (DB reveal_trip). Premium: never expire.
   if (planId === 'plus') {
     patch.expires_at = null
-  } else {
-    patch.expires_at = new Date(
-      Date.now() + RETENTION_DAYS_BASE * 24 * 60 * 60 * 1000,
-    ).toISOString()
   }
 
   const { data: trip, error: updateError } = await supabase

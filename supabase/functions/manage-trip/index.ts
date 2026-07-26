@@ -100,17 +100,22 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'end') {
-    const { data: updated, error: endError } = await supabase
-      .from('trips')
-      .update({ is_revealed: true })
-      .eq('id', trip.id)
-      .select(TRIP_FIELDS)
-      .single()
+    const { data: revealed, error: endError } = await supabase.rpc('reveal_trip', {
+      p_trip_id: trip.id,
+    })
     if (endError) {
       console.error('manage-trip end error', endError)
       return json({ error: 'end_failed' }, 500, headers)
     }
-    return json({ trip: publicTrip(updated) }, 200, headers)
+    if (revealed !== true && trip.is_revealed !== true) {
+      return json({ error: 'end_failed' }, 500, headers)
+    }
+    const { data: refreshed } = await supabase
+      .from('trips')
+      .select(TRIP_FIELDS)
+      .eq('id', trip.id)
+      .single()
+    return json({ trip: publicTrip(refreshed ?? { ...trip, is_revealed: true }) }, 200, headers)
   }
 
   if (action === 'resend_email') {

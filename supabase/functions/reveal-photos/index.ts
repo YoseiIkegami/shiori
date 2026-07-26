@@ -109,11 +109,7 @@ Deno.serve(async (req) => {
 
     // Composite reveal: promote when the optional end time has passed.
     if (trip.is_revealed !== true && trip.reveal_at && Date.parse(trip.reveal_at) <= Date.now()) {
-      const { error: promoteError } = await supabase
-        .from('trips')
-        .update({ is_revealed: true })
-        .eq('id', trip.id)
-        .neq('is_revealed', true)
+      const { error: promoteError } = await supabase.rpc('reveal_trip', { p_trip_id: trip.id })
       if (promoteError) console.error('time-based promote error', promoteError)
       else trip.is_revealed = true
     }

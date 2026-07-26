@@ -167,16 +167,17 @@
   "plan": {
     "free": {
       "name": "FREE",
-      "summary": "～3枚・お試し"
+      "summary": "～3枚・約2時間（お試し）"
     },
     "standard": {
       "name": "Standard",
-      "summary": "～50枚・7日"
+      "summary": "～50枚・公開から30日"
     },
     "plus": {
       "name": "Premium",
       "summary": "～500枚・ずっと残る"
-    }
+    },
+    "recommend": "Recommend"
   },
   "trip": {
     "notFound": "旅が見つかりません",

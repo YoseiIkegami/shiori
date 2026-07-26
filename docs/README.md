@@ -38,7 +38,7 @@
 | 本番 URL | https://shiori.ikg-systems.com |
 | 旅 URL | `/t/{share_token}`（互換でレガシー slug も解決） |
 | 幹事 URL | `/manage/{share_token}?token={organizer_token}` |
-| 基準価格 | ¥150（`STRIPE_BASE_AMOUNT` / `VITE_STRIPE_BASE_AMOUNT`） |
+| 基準価格 | Standard ¥99 / Premium ¥499（USD $1 / $5） |
 | デフォルト枚数 | 50 枚 |
-| 保存期間 | 7 日（決済完了時に `expires_at` 設定） |
+| 保存期間 | Standard: 公開から30日 / Premium: 無期限 |
 | 技術スタック | Vue 3 + Vite + Vant / Supabase / Vercel |

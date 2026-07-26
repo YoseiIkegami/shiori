@@ -26,8 +26,8 @@ const PLANS: Record<
   { maxPhotos: number; retentionDays: number | null; freeTtlHours?: number; amounts: Record<Currency, number> }
 > = {
   free: { maxPhotos: 3, retentionDays: null, freeTtlHours: 2, amounts: { jpy: 0, usd: 0 } },
-  standard: { maxPhotos: 50, retentionDays: 7, amounts: { jpy: 150, usd: 100 } },
-  plus: { maxPhotos: 500, retentionDays: null, amounts: { jpy: 750, usd: 500 } },
+  standard: { maxPhotos: 50, retentionDays: 30, amounts: { jpy: 99, usd: 100 } },
+  plus: { maxPhotos: 500, retentionDays: null, amounts: { jpy: 499, usd: 500 } },
 }
 
 /** Display names. plan_id `plus` is kept internally; the label is Premium. */
@@ -244,12 +244,8 @@ Deno.serve(async (req) => {
       const planId = parsePlanId(session.metadata?.plan_id)
       const plan = PLANS[planId]
       const patch: Record<string, unknown> = { payment_status: 'paid' }
+      // Standard: expires_at set at reveal. Plus: never expire.
       if (plan.retentionDays == null) patch.expires_at = null
-      else {
-        patch.expires_at = new Date(
-          Date.now() + plan.retentionDays * 24 * 60 * 60 * 1000,
-        ).toISOString()
-      }
       await supabase.from('trips').update(patch).eq('id', tripId).neq('payment_status', 'paid')
     }
 

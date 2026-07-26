@@ -15,18 +15,19 @@
 
 | plan_id | 枚数上限（作成時に 1〜上限を選択） | 保存 | JPY | USD | 決済 |
 |---|---|---|---|---|---|
-| `free` | 〜3 | 約2時間（セッション） | 無料 | Free | なし・即 paid |
-| `standard` | 〜50 | 7日 | ¥150 | $1 | Checkout |
-| `plus` | 〜500 | 無期限（`expires_at` NULL） | ¥750 | $5 | Checkout |
+| `free` | 〜3 | 作成から約2時間 | 無料 | Free | なし・即 paid |
+| `standard` | 〜50 | **公開（解禁）から30日** | ¥99 | $1 | Checkout |
+| `plus` | 〜500 | 無期限（`expires_at` NULL） | ¥499 | $5 | Checkout |
 
 金額は Edge Function のマスタが決定。`max_photos` はクライアント指定可だが **プラン上限でクランプ**（信用しない）。
+Standard の `expires_at` は決済時ではなく **解禁時**（`reveal_trip`）に `now()+30日` で設定する。
 
 ## 環境変数
 
 ### フロント（`.env`）
 
 ```
-VITE_STRIPE_BASE_AMOUNT=150
+VITE_STRIPE_BASE_AMOUNT=99
 ```
 
 （表示フォールバック用。実課金はプランマスタ）
@@ -58,7 +59,7 @@ metadata: `trip_id`, `slug`, `plan_id`, `type`
 - `checkout.session.completed`
 - orders INSERT
 - `payment_status = paid`
-- `expires_at`: standard = now+7日、plus = NULL
+- `expires_at`: standard は解禁時に now+30日、plus = NULL（決済時は standard を立てない）
 
 ## 本番切替（テストモード → ライブモード）
 
@@ -93,7 +94,7 @@ Edge Functions の再デプロイは不要（secrets は自動反映）。
 
 ### 5. 動作確認
 
-- 本番モードではテストカード `4242…` は**使えない**。実カードで Standard（¥150）を1件決済 → `/create/success` → 撮影可能になることを確認
+- 本番モードではテストカード `4242…` は**使えない**。実カードで Standard（¥99）を1件決済 → `/create/success` → 撮影可能になることを確認
 - 確認後は Dashboard から返金してよい（返金しても trip は paid のまま）
 
 ### 戻し方

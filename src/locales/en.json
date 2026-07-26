@@ -155,16 +155,17 @@
   "plan": {
     "free": {
       "name": "FREE",
-      "summary": "3 shots · try it"
+      "summary": "Up to 3 shots · ~2 hours (trial)"
     },
     "standard": {
       "name": "Standard",
-      "summary": "50 shots · 7 days"
+      "summary": "Up to 50 shots · 30 days after reveal"
     },
     "plus": {
       "name": "Premium",
-      "summary": "500 shots · keeps forever"
-    }
+      "summary": "Up to 500 shots · keeps forever"
+    },
+    "recommend": "Recommend"
   },
   "trip": {
     "notFound": "Trip not found",

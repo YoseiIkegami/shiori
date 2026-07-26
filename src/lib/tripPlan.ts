@@ -24,20 +24,20 @@ export const PLANS: Record<PlanId, PlanDef> = {
   standard: {
     id: 'standard',
     maxPhotos: 50,
-    retentionDays: 7,
-    amounts: { jpy: 150, usd: 100 },
+    retentionDays: 30,
+    amounts: { jpy: 99, usd: 100 },
   },
   plus: {
     id: 'plus',
     maxPhotos: 500,
     retentionDays: null,
-    amounts: { jpy: 750, usd: 500 },
+    amounts: { jpy: 499, usd: 500 },
   },
 }
 
 export const DEFAULT_PLAN_ID: PlanId = 'free'
 export const DEFAULT_MAX_PHOTOS = PLANS.standard.maxPhotos
-export const RETENTION_DAYS = PLANS.standard.retentionDays ?? 7
+export const RETENTION_DAYS = PLANS.standard.retentionDays ?? 30
 export const FILM_COUNT_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const
 
 export function isPlanId(v: unknown): v is PlanId {

@@ -43,8 +43,8 @@ UI からは外した。複合解禁の DB / Edge ロジックは残る（既存
 
 | 定数 | フロント | バックエンド |
 |---|---|---|
-| 価格 | `VITE_STRIPE_BASE_AMOUNT`（default 150） | `STRIPE_BASE_AMOUNT` |
+| 価格 | `VITE_STRIPE_BASE_AMOUNT`（default 99） | プランマスタ（Edge） |
 | 枚数デフォルト | `DEFAULT_MAX_PHOTOS` = 50 | create-trip-checkout |
-| 保存日数 | `RETENTION_DAYS` = 7 | stripe-webhook `RETENTION_DAYS_BASE` |
+| 保存日数 | Standard: 公開から30日 | `reveal_trip` |
 
 フロント: [`tripPlan.ts`](../src/lib/tripPlan.ts), [`pricing.ts`](../src/lib/pricing.ts)

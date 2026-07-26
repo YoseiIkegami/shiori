@@ -14,7 +14,7 @@ Stripe Checkout で支払い
 stripe-webhook（checkout.session.completed）
   - orders INSERT
   - payment_status='paid'
-  - expires_at = 現在 + 7日（plus は NULL）
+  - expires_at: Standard は解禁時に now+30日（決済時は未設定）。plus は NULL
   - Resend で幹事へ共有・幹事 URL 送信
   ↓
 /create/success?session_id=...
@@ -56,7 +56,7 @@ stripe-webhook（checkout.session.completed）
 
 ## 5. 保存期間・削除
 
-- 新規有料 trip: 決済完了から **7 日** で `expires_at` 設定
+- 新規 Standard trip: **公開（解禁）から 30 日** で `expires_at` 設定（決済時点では立てない）
 - 既存 trip（`summer-boardgames` / `test`）: マイグレーションで `paid` + `expires_at = NULL`（削除対象外）
 - 自動削除バッチは **Phase 2c 実装済み**（`purge-expired-trips`）。`expires_at IS NULL` は対象外
 
