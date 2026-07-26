@@ -54,13 +54,8 @@ export function detectLocale(): AppLocale {
   } catch {
     /* ignore */
   }
-  const candidates =
-    typeof navigator !== 'undefined' ? navigator.languages ?? [navigator.language] : []
-  for (const lang of candidates) {
-    const base = lang.toLowerCase().split('-')[0]
-    if (isAppLocale(base)) return base
-  }
-  return 'en'
+  // Product default is Japanese; English only after explicit switch (or stored preference).
+  return 'ja'
 }
 
 export function currencyForLocale(locale: AppLocale = getLocale()): CheckoutCurrency {
