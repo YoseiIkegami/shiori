@@ -508,7 +508,7 @@ h1 {
 }
 
 .plan-card.recommended {
-  border-color: var(--accent);
+  /* Badge only — no orange border (conflicts with selected state). */
 }
 
 .plan-card.selected {
