@@ -19,10 +19,10 @@
 | ブランチ | 役割 |
 |---|---|
 | `production` | リリース済みの安定線。本番反映の基準 |
-| `develop` | 今後の開発の既定ブランチ |
-| `master` | 履歴互換のため残置（新規作業は `develop`） |
+| `develop` | 開発の既定ブランチ（`master` と同内容に揃える） |
+| `master` | `develop` に統一。別名として残す |
 
-- 日常の実装は `develop` で行う
+- 日常の実装は `develop` で行う（`master` は `develop` に追従）
 - リリース時に `production` へ取り込み、明示依頼時のみ `vercel --prod`
 - CI/CD（`develop` への PR チェック、`production` へのゲート付きデプロイ）は今後整備
 
