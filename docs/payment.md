@@ -7,7 +7,8 @@
 - 通貨はアプリ locale（ja → JPY、それ以外 → USD）
 - Checkout 画面言語は Session の `locale`（`ja` / `en`）でアプリに合わせる
 - 未払い trip は撮影・閲覧不可
-- 決済完了後、Webhook から Resend で幹事へ共有URL・幹事URLを送信（`RESEND_API_KEY`）
+- 決済完了後、Webhook から Resend で幹事へ共有URL・設定URL・共有QRを送信（`RESEND_API_KEY`）
+- 設定画面からの再送信は **60秒クールダウン**（サーバーenforce）
 - **領収書メール**は Stripe Dashboard の「顧客へのメール / Receipts」を有効化（自前送信しない）
 
 ## プラン

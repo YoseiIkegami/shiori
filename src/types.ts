@@ -18,6 +18,9 @@ export type Trip = {
   date_format?: DateFormat
   expires_at?: string | null
   payment_status?: PaymentStatus
+  organizer_email?: string | null
+  /** Last confirmation email send (ISO). Used for resend cooldown. */
+  organizer_email_sent_at?: string | null
   theme_id?: string
   created_at?: string
 }

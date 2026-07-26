@@ -39,6 +39,10 @@ const EDGE_ERROR_KEYS: Record<string, string> = {
   photo_id_required: 'board.reportFailed',
   hide_failed: 'board.reportFailed',
   photo_not_found: 'board.reportFailed',
+  email_required: 'manage.emailRequired',
+  email_invalid: 'manage.emailInvalid',
+  send_failed: 'manage.resendFailed',
+  rate_limited: 'manage.resendWait',
 }
 
 function translateEdgeError(code: string, fallback: string): string {
@@ -52,7 +56,13 @@ async function functionError(error: unknown, fallback: string): Promise<Error> {
     try {
       const body = await error.context.json()
       if (typeof body?.error === 'string' && body.error) {
-        return new Error(translateEdgeError(body.error, fallback))
+        const err = new Error(translateEdgeError(body.error, fallback)) as Error & {
+          retryAfter?: number
+        }
+        if (body.error === 'rate_limited' && Number.isFinite(Number(body.retry_after))) {
+          err.retryAfter = Math.max(1, Math.ceil(Number(body.retry_after)))
+        }
+        return err
       }
     } catch {
       /* body is not JSON */
@@ -62,10 +72,16 @@ async function functionError(error: unknown, fallback: string): Promise<Error> {
   return error instanceof Error ? error : new Error(fallback)
 }
 
-function throwDataError(data: { error?: unknown } | null, fallback: string): void {
+function throwDataError(data: { error?: unknown; retry_after?: unknown } | null, fallback: string): void {
   if (!data?.error) return
   const code = typeof data.error === 'string' ? data.error : ''
-  throw new Error(code ? translateEdgeError(code, fallback) : fallback)
+  const err = new Error(code ? translateEdgeError(code, fallback) : fallback) as Error & {
+    retryAfter?: number
+  }
+  if (code === 'rate_limited' && Number.isFinite(Number(data.retry_after))) {
+    err.retryAfter = Math.max(1, Math.ceil(Number(data.retry_after)))
+  }
+  throw err
 }
 
 const UUID_RE =
@@ -409,6 +425,21 @@ export async function manageTripUpdate(
     slug: tripKey,
     token,
     patch,
+  })
+  return data.trip as ManageTrip
+}
+
+export async function manageTripResendEmail(
+  tripKey: string,
+  token: string,
+  email: string,
+): Promise<ManageTrip> {
+  const data = await manageTripInvoke({
+    action: 'resend_email',
+    share_token: tripKey,
+    slug: tripKey,
+    token,
+    email,
   })
   return data.trip as ManageTrip
 }

@@ -75,6 +75,32 @@
           <p class="film-fixed">{{ t('manage.filmFixed', { n: trip.max_photos }) }}</p>
         </div>
 
+        <div class="field">
+          <span class="flow-label">{{ t('manage.email') }}</span>
+          <input
+            v-model="form.organizer_email"
+            class="flow-input"
+            type="email"
+            autocomplete="email"
+            :placeholder="t('manage.emailPlaceholder')"
+            :aria-label="t('manage.email')"
+          />
+          <button
+            type="button"
+            class="resend-btn"
+            :disabled="resending || !canResend || resendCooldownSec > 0"
+            @click="onResendEmail"
+          >
+            {{
+              resending
+                ? t('manage.resending')
+                : resendCooldownSec > 0
+                  ? t('manage.resendCooldown', { n: resendCooldownSec })
+                  : t('manage.resendEmail')
+            }}
+          </button>
+        </div>
+
         <div class="field switch-row">
           <span class="flow-label">{{ t('create.commentRequired') }}</span>
           <van-switch v-model="form.comment_required" size="22px" active-color="#bd5825" />
@@ -105,16 +131,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
-import { manageTripEnd, manageTripGet, manageTripUpdate, tripPublicKey, type ManageTrip } from '@/lib/tripApi'
+import { manageTripEnd, manageTripGet, manageTripResendEmail, manageTripUpdate, tripPublicKey, type ManageTrip } from '@/lib/tripApi'
 import { buildTripShareMessage } from '@/lib/shareMessage'
 
 const { t } = useI18n()
+
+/** Match server ORGANIZER_MAIL_COOLDOWN_SEC (transactional email BP: 60s). */
+const RESEND_COOLDOWN_SEC = 60
 
 const props = defineProps<{ slug: string }>()
 const route = useRoute()
@@ -125,13 +154,46 @@ const error = ref<string | null>(null)
 const trip = ref<ManageTrip | null>(null)
 const saving = ref(false)
 const ending = ref(false)
+const resending = ref(false)
+const resendCooldownSec = ref(0)
 const editingName = ref(false)
 const nameInput = ref<HTMLInputElement | null>(null)
+
+let resendTimer: ReturnType<typeof setInterval> | null = null
+
+function clearResendTimer() {
+  if (resendTimer != null) {
+    clearInterval(resendTimer)
+    resendTimer = null
+  }
+}
+
+function startResendCooldown(seconds: number) {
+  clearResendTimer()
+  resendCooldownSec.value = Math.max(0, Math.ceil(seconds))
+  if (resendCooldownSec.value <= 0) return
+  resendTimer = setInterval(() => {
+    resendCooldownSec.value = Math.max(0, resendCooldownSec.value - 1)
+    if (resendCooldownSec.value <= 0) clearResendTimer()
+  }, 1000)
+}
+
+function syncResendCooldownFromTrip(row: ManageTrip) {
+  const sentAt = row.organizer_email_sent_at ? Date.parse(row.organizer_email_sent_at) : NaN
+  if (!Number.isFinite(sentAt)) {
+    clearResendTimer()
+    resendCooldownSec.value = 0
+    return
+  }
+  const remaining = RESEND_COOLDOWN_SEC - Math.floor((Date.now() - sentAt) / 1000)
+  startResendCooldown(remaining)
+}
 
 const token = computed(() => String(route.query.token ?? ''))
 
 const form = reactive({
   name: '',
+  organizer_email: '',
   comment_required: true,
   show_nicknames: false,
 })
@@ -154,18 +216,24 @@ const dirty = computed(() => {
   if (!trip.value) return false
   const baselineComment = trip.value.comment_required !== false
   const baselineNick = trip.value.show_nicknames === true
+  const baselineEmail = (trip.value.organizer_email ?? '').trim().toLowerCase()
   return (
     form.name.trim() !== trip.value.name ||
+    form.organizer_email.trim().toLowerCase() !== baselineEmail ||
     form.comment_required !== baselineComment ||
     form.show_nicknames !== baselineNick
   )
 })
 
+const canResend = computed(() => form.organizer_email.trim().includes('@'))
+
 function syncForm(row: ManageTrip) {
   form.name = row.name
+  form.organizer_email = row.organizer_email ?? ''
   form.comment_required = row.comment_required !== false
   form.show_nicknames = row.show_nicknames === true
   editingName.value = false
+  syncResendCooldownFromTrip(row)
 }
 
 async function startNameEdit() {
@@ -256,6 +324,7 @@ async function onSave() {
   try {
     const updated = await manageTripUpdate(props.slug, token.value, {
       name: form.name.trim() || trip.value.name,
+      organizer_email: form.organizer_email.trim(),
       comment_required: form.comment_required,
       show_nicknames: form.show_nicknames,
       date_format: 'none',
@@ -268,6 +337,30 @@ async function onSave() {
     showToast(e instanceof Error ? e.message : t('manage.saveFailed'))
   } finally {
     saving.value = false
+  }
+}
+
+async function onResendEmail() {
+  if (!trip.value || resending.value || !canResend.value || resendCooldownSec.value > 0) return
+  resending.value = true
+  try {
+    const updated = await manageTripResendEmail(
+      props.slug,
+      token.value,
+      form.organizer_email.trim(),
+    )
+    trip.value = updated
+    syncForm(updated)
+    showToast(t('manage.resendSent'))
+  } catch (e) {
+    console.error(e)
+    const retryAfter = (e as Error & { retryAfter?: number }).retryAfter
+    if (typeof retryAfter === 'number' && retryAfter > 0) {
+      startResendCooldown(retryAfter)
+    }
+    showToast(e instanceof Error ? e.message : t('manage.resendFailed'))
+  } finally {
+    resending.value = false
   }
 }
 
@@ -295,6 +388,10 @@ async function onEnd() {
 
 onMounted(() => {
   void boot()
+})
+
+onBeforeUnmount(() => {
+  clearResendTimer()
 })
 </script>
 
@@ -449,6 +546,23 @@ h1 {
   font-weight: 600;
   color: var(--ink-brown);
   font-variant-numeric: tabular-nums;
+}
+
+.resend-btn {
+  align-self: flex-start;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.resend-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .end-btn {

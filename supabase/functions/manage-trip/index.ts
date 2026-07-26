@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
+import {
+  ORGANIZER_MAIL_COOLDOWN_SEC,
+  sendOrganizerLinks,
+} from '../_shared/organizerMail.ts'
 
 // Organizer settings page backend. Auth is the secret organizer_token in the URL,
 // verified here with service_role (anon has no UPDATE on trips).
@@ -28,12 +32,19 @@ const json = (body: unknown, status: number, headers: Record<string, string>) =>
 
 const TRIP_FIELDS =
   'id, slug, name, share_token, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
-  'show_nicknames, comment_required, date_format, expires_at, payment_status, organizer_token'
+  'show_nicknames, comment_required, date_format, expires_at, payment_status, ' +
+  'organizer_email, organizer_email_sent_at, organizer_token'
 
 function publicTrip(trip: Record<string, unknown>) {
   // Never leak organizer_token back through get/update responses.
   const { organizer_token: _omit, ...rest } = trip
   return rest
+}
+
+function normalizeEmail(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
 }
 
 async function findTripByKey(
@@ -102,6 +113,64 @@ Deno.serve(async (req) => {
     return json({ trip: publicTrip(updated) }, 200, headers)
   }
 
+  if (action === 'resend_email') {
+    const emailFromBody = normalizeEmail(body.email)
+    const email = emailFromBody || normalizeEmail(trip.organizer_email)
+    if (!email || !email.includes('@')) {
+      return json({ error: 'email_required' }, 400, headers)
+    }
+
+    const lastSentMs = trip.organizer_email_sent_at
+      ? Date.parse(String(trip.organizer_email_sent_at))
+      : NaN
+    if (Number.isFinite(lastSentMs)) {
+      const elapsedSec = Math.floor((Date.now() - lastSentMs) / 1000)
+      const retryAfter = ORGANIZER_MAIL_COOLDOWN_SEC - elapsedSec
+      if (retryAfter > 0) {
+        return json({ error: 'rate_limited', retry_after: retryAfter }, 429, headers)
+      }
+    }
+
+    if (email !== normalizeEmail(trip.organizer_email)) {
+      const { error: emailError } = await supabase
+        .from('trips')
+        .update({ organizer_email: email })
+        .eq('id', trip.id)
+      if (emailError) {
+        console.error('manage-trip email save error', emailError)
+        return json({ error: 'update_failed' }, 500, headers)
+      }
+      trip.organizer_email = email
+    }
+
+    const appOrigin = (Deno.env.get('APP_ORIGIN') ?? 'https://shiori.ikg-systems.com').replace(
+      /\/$/,
+      '',
+    )
+    const shareKey = trip.share_token || trip.slug
+    const sent = await sendOrganizerLinks({
+      email,
+      tripName: trip.name || trip.slug || 'SHIORI',
+      shareUrl: `${appOrigin}/t/${shareKey}`,
+      manageUrl: `${appOrigin}/manage/${shareKey}?token=${encodeURIComponent(token)}`,
+    })
+    if (!sent.ok) return json({ error: sent.error }, 500, headers)
+
+    const sentAt = new Date().toISOString()
+    const { data: refreshed, error: sentAtError } = await supabase
+      .from('trips')
+      .update({ organizer_email_sent_at: sentAt })
+      .eq('id', trip.id)
+      .select(TRIP_FIELDS)
+      .single()
+    if (sentAtError) {
+      console.error('manage-trip sent_at update error', sentAtError)
+      trip.organizer_email_sent_at = sentAt
+      return json({ trip: publicTrip(trip), sent: true }, 200, headers)
+    }
+    return json({ trip: publicTrip(refreshed ?? trip), sent: true }, 200, headers)
+  }
+
   if (action === 'update') {
     const patch = (body.patch ?? {}) as Record<string, unknown>
     const update: Record<string, unknown> = {}
@@ -121,6 +190,11 @@ Deno.serve(async (req) => {
     if (typeof patch.comment_required === 'boolean') update.comment_required = patch.comment_required
     // 日付スタンプは常時OFF（互換のためカラムのみ更新可・値は none 固定）
     if ('date_format' in patch) update.date_format = 'none'
+    if (typeof patch.organizer_email === 'string') {
+      const email = normalizeEmail(patch.organizer_email)
+      if (email && !email.includes('@')) return json({ error: 'email_invalid' }, 400, headers)
+      update.organizer_email = email || null
+    }
 
     if (Object.keys(update).length === 0) {
       return json({ trip: publicTrip(trip) }, 200, headers)
