@@ -51,6 +51,7 @@
     "planLabel": "プラン",
     "filmCountLabel": "フィルムの枚数",
     "filmCountValue": "{n} 枚",
+    "retentionNote": "保存期間終了後はすべて削除されます。",
     "commentRequired": "ひとことを必須にする",
     "showNicknames": "撮った人の名前を表示",
     "preparing": "準備中…",
@@ -166,16 +167,17 @@
   },
   "plan": {
     "free": {
-      "name": "FREE",
-      "summary": "～3枚・約2時間（お試し）"
+      "name": "トライアル",
+      "summary": "～3枚",
+      "price": "無料"
     },
     "standard": {
       "name": "Standard",
-      "summary": "～50枚・公開から30日"
+      "summary": "～50枚・開封後30日"
     },
     "plus": {
       "name": "Premium",
-      "summary": "～500枚・ずっと残る"
+      "summary": "～500枚・期限なし"
     },
     "recommend": "おすすめ"
   },

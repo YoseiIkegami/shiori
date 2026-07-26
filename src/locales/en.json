@@ -51,6 +51,7 @@
     "planLabel": "Plan",
     "filmCountLabel": "Film count",
     "filmCountValue": "{n} shots",
+    "retentionNote": "Everything is deleted after the retention period.",
     "commentRequired": "Require a caption",
     "showNicknames": "Show photographer names",
     "preparing": "Preparing…",
@@ -154,16 +155,17 @@
   },
   "plan": {
     "free": {
-      "name": "FREE",
-      "summary": "Up to 3 shots · ~2 hours (trial)"
+      "name": "Trial",
+      "summary": "Up to 3 shots",
+      "price": "Free"
     },
     "standard": {
       "name": "Standard",
-      "summary": "Up to 50 shots · 30 days after reveal"
+      "summary": "Up to 50 shots · 30 days after opening"
     },
     "plus": {
       "name": "Premium",
-      "summary": "Up to 500 shots · keeps forever"
+      "summary": "Up to 500 shots · no expiry"
     },
     "recommend": "Recommend"
   },

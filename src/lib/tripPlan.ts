@@ -53,7 +53,7 @@ export function formatPlanPrice(
   currency: CheckoutCurrency = currencyForLocale(),
 ): string {
   const amount = PLANS[planId].amounts[currency]
-  if (amount <= 0) return i18n.global.t('plan.free.name')
+  if (amount <= 0) return i18n.global.t('plan.free.price')
   const major = currency === 'jpy' ? amount : amount / 100
   return i18n.global.n(major, 'currency', currency === 'jpy' ? 'ja' : 'en')
 }

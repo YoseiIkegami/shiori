@@ -73,18 +73,21 @@
               :aria-checked="planId === id"
               @click="onSelectPlan(id)"
             >
-              <span v-if="id === 'standard'" class="plan-badge">{{ t('plan.recommend') }}</span>
-              <span class="plan-name">{{ t(`plan.${id}.name`) }}</span>
-              <span class="plan-summary">{{ t(`plan.${id}.summary`) }}</span>
+              <div class="plan-main">
+                <span v-if="id === 'standard'" class="plan-badge">{{ t('plan.recommend') }}</span>
+                <span class="plan-name">{{ t(`plan.${id}.name`) }}</span>
+                <span class="plan-summary">{{ t(`plan.${id}.summary`) }}</span>
+              </div>
               <span class="plan-price">{{ planPriceLabel(id) }}</span>
             </button>
           </div>
         </div>
 
-        <label class="field">
+        <div class="field">
           <span class="flow-label">{{ t('create.filmCountLabel') }}</span>
           <FilmCountPicker v-model="maxPhotos" :max="planFilmCap" />
-        </label>
+          <p class="retention-note">{{ t('create.retentionNote') }}</p>
+        </div>
       </section>
 
       <div class="flow-bottom">
@@ -481,13 +484,9 @@ h1 {
 }
 
 .plan-card {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto auto;
-  column-gap: 12px;
-  row-gap: 2px;
+  display: flex;
   align-items: center;
-  position: relative;
+  gap: 12px;
   min-height: 68px;
   padding: 14px 16px;
   border: 1.5px solid var(--line);
@@ -517,10 +516,17 @@ h1 {
   background: var(--accent-soft);
 }
 
+.plan-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
 .plan-badge {
-  grid-column: 1 / -1;
-  justify-self: start;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   padding: 2px 8px;
   border: 1px solid var(--accent);
   border-radius: 999px;
@@ -532,31 +538,31 @@ h1 {
 }
 
 .plan-name {
-  grid-column: 1;
   font-weight: 700;
   color: var(--ink-brown);
   font-size: 0.95rem;
 }
 
 .plan-summary {
-  grid-column: 1;
   font-size: 0.78rem;
   color: var(--text-muted);
 }
 
 .plan-price {
-  grid-column: 2;
-  grid-row: 2 / span 2;
+  flex-shrink: 0;
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
-.plan-card:not(:has(.plan-badge)) .plan-price {
-  grid-row: 1 / span 2;
+.retention-note {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-muted);
 }
-
 .switch-row {
   flex-direction: row;
   align-items: center;
