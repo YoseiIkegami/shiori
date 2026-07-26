@@ -160,7 +160,7 @@ import { showConfirmDialog, showToast } from 'vant'
 import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import { manageTripEnd, manageTripGet, manageTripResendEmail, manageTripUpdate, tripPublicKey, type ManageTrip } from '@/lib/tripApi'
-import { buildTripShareMessageForLocale, shareCopyParts } from '@/lib/shareMessage'
+import { buildTripShareMessageForLocale } from '@/lib/shareMessage'
 import type { AppLocale } from '@/i18n'
 
 const { t } = useI18n()
@@ -312,15 +312,11 @@ function goBack() {
 }
 
 async function shareTrip() {
-  if (!shareUrl.value) return
-  const parts = shareCopyParts(shareLocale.value)
+  if (!shareMessage.value) return
+  // Pass a single `text` blob. Splitting title/text/url drops the body on many mobile share sheets.
   if (navigator.share) {
     try {
-      await navigator.share({
-        title: parts.title,
-        text: parts.text,
-        url: shareUrl.value,
-      })
+      await navigator.share({ text: shareMessage.value })
       return
     } catch (e) {
       if ((e as Error).name === 'AbortError') return

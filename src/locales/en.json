@@ -6,8 +6,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy",
-    "shareTitle": "SHIORI -instant camera-",
-    "shareBody": "A disposable camera for keeping memories",
+      "shareTitle": "SHIORI — instant camera",
+      "shareBody": "A disposable camera for keeping memories",
     "language": "Language",
     "menu": "Menu",
     "legal": {
@@ -161,7 +161,7 @@
     },
     "standard": {
       "name": "Standard",
-      "summary": "Up to 50 shots · 30 days after opening"
+      "summary": "Up to 50 shots · Retention: 30 days after opening"
     },
     "plus": {
       "name": "Premium",
@@ -274,7 +274,7 @@
     "emailPlaceholder": "Email address",
     "emailRequired": "Enter an email address",
     "emailInvalid": "Enter a valid email address",
-    "shareLocale": "Share language",
+    "shareLocale": "Trip language",
     "shareLocaleJa": "日本語",
     "shareLocaleEn": "English",
     "resendEmail": "Resend confirmation email",

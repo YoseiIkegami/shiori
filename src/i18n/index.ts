@@ -79,15 +79,20 @@ function syncVantLocale(locale: AppLocale) {
   VantLocale.use(locale === 'ja' ? 'ja-JP' : 'en-US', locale === 'ja' ? jaJP : enUS)
 }
 
-export function setLocale(locale: AppLocale) {
+export function applyLocale(locale: AppLocale, opts?: { persist?: boolean }) {
   i18n.global.locale.value = locale
+  syncDocumentLang(locale)
+  syncVantLocale(locale)
+  if (opts?.persist === false) return
   try {
     localStorage.setItem(STORAGE_KEY, locale)
   } catch {
     /* ignore */
   }
-  syncDocumentLang(locale)
-  syncVantLocale(locale)
+}
+
+export function setLocale(locale: AppLocale) {
+  applyLocale(locale, { persist: true })
 }
 
 export function initI18n() {

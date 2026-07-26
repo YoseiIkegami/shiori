@@ -182,6 +182,7 @@ import {
   uploadPhoto,
 } from '@/lib/tripApi'
 import type { AppMode, RevealedPhoto, ShootState, Trip } from '@/types'
+import { applyLocale, getLocale, type AppLocale } from '@/i18n'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -193,6 +194,8 @@ const props = defineProps<{
 const trip = ref<Trip | null>(null)
 const bootLoading = ref(true)
 const bootError = ref<string | null>(null)
+/** UI locale before entering this trip (restored on leave; share_locale is not persisted). */
+const localeBeforeTrip = ref<AppLocale | null>(null)
 const mode = ref<AppMode>('shoot')
 const isPaid = computed(() => (trip.value ? isTripPaid(trip.value) : false))
 const commentRequired = computed(() => trip.value?.comment_required !== false)
@@ -310,6 +313,12 @@ function syncModeFromTrip() {
   }
 }
 
+function applyTripShareLocale(row: Trip) {
+  const shareLoc: AppLocale = row.share_locale === 'en' ? 'en' : 'ja'
+  if (localeBeforeTrip.value == null) localeBeforeTrip.value = getLocale()
+  applyLocale(shareLoc, { persist: false })
+}
+
 async function boot() {
   bootLoading.value = true
   bootError.value = null
@@ -319,6 +328,7 @@ async function boot() {
       void router.replace({ name: 'not-found' })
       return
     }
+    applyTripShareLocale(data)
     trip.value = data
     syncModeFromTrip()
   } catch (e) {
@@ -650,6 +660,10 @@ async function onFreeRestart() {
 
 onBeforeUnmount(() => {
   revokePreview()
+  if (localeBeforeTrip.value != null) {
+    applyLocale(localeBeforeTrip.value, { persist: false })
+    localeBeforeTrip.value = null
+  }
 })
 </script>
 

@@ -86,7 +86,7 @@
         <div class="field">
           <span class="flow-label">{{ t('create.filmCountLabel') }}</span>
           <FilmCountPicker v-model="maxPhotos" :max="planFilmCap" />
-          <p class="retention-note">{{ t('create.retentionNote') }}</p>
+          <p v-if="planId === 'standard'" class="retention-note">{{ t('create.retentionNote') }}</p>
         </div>
       </section>
 

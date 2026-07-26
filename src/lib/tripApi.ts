@@ -89,7 +89,7 @@ const UUID_RE =
 
 const TRIP_SELECT =
   'id, slug, name, share_token, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
-  'show_nicknames, comment_required, date_format, expires_at, payment_status, theme_id, created_at'
+  'show_nicknames, comment_required, date_format, expires_at, payment_status, share_locale, theme_id, created_at'
 
 /** Resolve trip by share_token, legacy slug, or UUID. */
 export async function fetchTrip(tripKey: string): Promise<Trip | null> {

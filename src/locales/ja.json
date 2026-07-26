@@ -167,13 +167,13 @@
   },
   "plan": {
     "free": {
-      "name": "トライアル",
+      "name": "Trial",
       "summary": "～3枚",
       "price": "無料"
     },
     "standard": {
       "name": "Standard",
-      "summary": "～50枚・開封後30日"
+      "summary": "～50枚・保存期間：開封後30日"
     },
     "plus": {
       "name": "Premium",
@@ -286,7 +286,7 @@
     "emailPlaceholder": "メールアドレス",
     "emailRequired": "メールアドレスを入力してください",
     "emailInvalid": "メールアドレスの形式が正しくありません",
-    "shareLocale": "共有の言語",
+    "shareLocale": "旅の言語",
     "shareLocaleJa": "日本語",
     "shareLocaleEn": "English",
     "resendEmail": "確認メールを再送信",

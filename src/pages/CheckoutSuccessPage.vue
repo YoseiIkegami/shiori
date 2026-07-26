@@ -134,7 +134,7 @@ import { showToast } from 'vant'
 import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import QrCode from '@/components/QrCode.vue'
-import { fetchCheckoutResult, storeFreeOrganizerToken } from '@/lib/tripApi'
+import { fetchCheckoutResult, manageTripGet, storeFreeOrganizerToken } from '@/lib/tripApi'
 import { buildTripShareMessageForLocale } from '@/lib/shareMessage'
 import { getLocale, type AppLocale } from '@/i18n'
 
@@ -260,14 +260,29 @@ onMounted(async () => {
     } catch {
       /* ignore */
     }
+    const shareKey = freeShare || freeSlug
     result.value = {
       slug: freeSlug,
       name: String(route.query.name ?? '').trim() || freeSlug,
-      share_token: freeShare || freeSlug,
+      share_token: shareKey,
       organizer_token: freeToken,
       payment_status: 'paid',
       plan_id: 'free',
       share_locale: getLocale(),
+    }
+    try {
+      const row = await manageTripGet(shareKey, freeToken)
+      result.value = {
+        slug: row.slug,
+        name: row.name || freeSlug,
+        share_token: row.share_token || shareKey,
+        organizer_token: freeToken,
+        payment_status: 'paid',
+        plan_id: row.plan_id || 'free',
+        share_locale: row.share_locale === 'en' ? 'en' : 'ja',
+      }
+    } catch {
+      /* keep query fallback */
     }
     loading.value = false
     return
