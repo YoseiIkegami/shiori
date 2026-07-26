@@ -19,7 +19,8 @@ function isAppLocale(v: unknown): v is AppLocale {
   return (SUPPORTED_LOCALES as readonly string[]).includes(v as string)
 }
 
-const STORAGE_KEY = 'shiori.locale'
+const STORAGE_KEY = 'shiori.locale.v2'
+const LEGACY_STORAGE_KEY = 'shiori.locale'
 
 export const i18n = createI18n({
   legacy: false,
@@ -51,10 +52,11 @@ export function detectLocale(): AppLocale {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (isAppLocale(stored)) return stored
+    // Drop legacy auto-detected en from browser language; product default is ja.
+    localStorage.removeItem(LEGACY_STORAGE_KEY)
   } catch {
     /* ignore */
   }
-  // Product default is Japanese; English only after explicit switch (or stored preference).
   return 'ja'
 }
 
