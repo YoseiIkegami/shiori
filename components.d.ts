@@ -11,6 +11,7 @@ declare module 'vue' {
     ConfirmSend: typeof import('./src/components/ConfirmSend.vue')['default']
     CorkboardGallery: typeof import('./src/components/CorkboardGallery.vue')['default']
     FilmCountPicker: typeof import('./src/components/FilmCountPicker.vue')['default']
+    HamburgerMenu: typeof import('./src/components/HamburgerMenu.vue')['default']
     HowToSlideshow: typeof import('./src/components/HowToSlideshow.vue')['default']
     IntroDialog: typeof import('./src/components/IntroDialog.vue')['default']
     LangSwitcher: typeof import('./src/components/LangSwitcher.vue')['default']
@@ -19,7 +20,6 @@ declare module 'vue' {
     NicknameDialog: typeof import('./src/components/NicknameDialog.vue')['default']
     PhotoPreview: typeof import('./src/components/PhotoPreview.vue')['default']
     QrCode: typeof import('./src/components/QrCode.vue')['default']
-    RevealAtField: typeof import('./src/components/RevealAtField.vue')['default']
     RevealCompleteDialog: typeof import('./src/components/RevealCompleteDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
@@ -28,6 +28,7 @@ declare module 'vue' {
     VanButton: typeof import('vant/es')['Button']
     VanEmpty: typeof import('vant/es')['Empty']
     VanNoticeBar: typeof import('vant/es')['NoticeBar']
+    VanPicker: typeof import('vant/es')['Picker']
     VanPopup: typeof import('vant/es')['Popup']
     VanSwitch: typeof import('vant/es')['Switch']
   }

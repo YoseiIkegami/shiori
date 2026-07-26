@@ -66,15 +66,36 @@ export function tripPriceButtonLabel(
   return i18n.global.t('create.submitPaid', { price: formatPlanPrice(planId, currency) })
 }
 
+export function filmCountOptionsForMax(max: number): number[] {
+  const cap = Math.max(1, Math.floor(max))
+  // 上限が小さい（FREE など）は 1 枚刻み。50 / 500 は 10 枚刻み
+  if (cap <= 10) {
+    return Array.from({ length: cap }, (_, i) => i + 1)
+  }
+  const opts: number[] = []
+  for (let n = 10; n <= cap; n += 10) opts.push(n)
+  if (opts[opts.length - 1] !== cap) opts.push(cap)
+  return opts
+}
+
 export function filmCountSelectOptions(current?: number, planId?: PlanId): number[] {
   const cap = planId ? PLANS[planId].maxPhotos : 500
-  const base: number[] = [...FILM_COUNT_OPTIONS].filter((n) => n <= cap)
-  if (current != null && current > 0 && !base.includes(current)) {
-    base.push(Math.min(current, cap))
+  const base = filmCountOptionsForMax(cap)
+  if (current != null && current > 0 && current <= cap && !base.includes(current)) {
+    base.push(current)
     base.sort((a, b) => a - b)
   }
-  if (!base.length) base.push(cap)
   return base
+}
+
+export function clampFilmCount(n: number, planId: PlanId): number {
+  const opts = filmCountOptionsForMax(PLANS[planId].maxPhotos)
+  const fallback = opts[opts.length - 1] ?? 1
+  if (!Number.isFinite(n)) return fallback
+  const v = Math.floor(n)
+  if (opts.includes(v)) return v
+  const floored = [...opts].reverse().find((o) => o <= v)
+  return floored ?? opts[0] ?? fallback
 }
 
 export function checkoutCurrency(): CheckoutCurrency {

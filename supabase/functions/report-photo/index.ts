@@ -27,23 +27,23 @@ Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('Origin'))
 
   if (req.method === 'OPTIONS') return new Response('ok', { headers })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, headers)
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, headers)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!supabaseUrl || !serviceRoleKey) return json({ error: 'Server misconfigured' }, 500, headers)
+  if (!supabaseUrl || !serviceRoleKey) return json({ error: 'misconfigured' }, 500, headers)
 
   let body: Record<string, unknown>
   try {
     body = await req.json()
   } catch {
-    return json({ error: 'Invalid JSON' }, 400, headers)
+    return json({ error: 'invalid_json' }, 400, headers)
   }
 
   const photoId = String(body.photo_id ?? '').trim()
   const uuidRe =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if (!uuidRe.test(photoId)) return json({ error: 'photo_id is required' }, 400, headers)
+  if (!uuidRe.test(photoId)) return json({ error: 'photo_id_required' }, 400, headers)
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const { data, error } = await supabase
@@ -55,9 +55,9 @@ Deno.serve(async (req) => {
 
   if (error) {
     console.error('report-photo error', error)
-    return json({ error: 'Failed to hide photo' }, 500, headers)
+    return json({ error: 'hide_failed' }, 500, headers)
   }
-  if (!data) return json({ error: 'Photo not found' }, 404, headers)
+  if (!data) return json({ error: 'photo_not_found' }, 404, headers)
 
   return json({ ok: true, photo_id: data.id }, 200, headers)
 })

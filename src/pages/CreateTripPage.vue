@@ -12,11 +12,11 @@
       </button>
       <router-link v-else class="back" to="/" :aria-label="t('common.back')">←</router-link>
       <div class="head-copy">
-        <h1>{{ t('create.title') }}</h1>
-        <p>{{ step === 1 ? t('create.stepSetup') : t('create.stepPlan') }}</p>
+        <h1>{{ step === 1 ? t('create.stepSetup') : t('create.stepPlan') }}</h1>
+        <span class="flow-step">{{ step }} / 2</span>
       </div>
-      <span class="flow-step">{{ step }} / 2</span>
     </header>
+    <HamburgerMenu />
 
     <form class="form" @submit.prevent="onSubmit">
       <section v-if="step === 1" class="step">
@@ -27,11 +27,9 @@
               v-model="titleInput"
               class="flow-input title-input"
               type="text"
-              maxlength="30"
+              :maxlength="NAME_MAX"
               autocomplete="off"
-              spellcheck="false"
               :placeholder="t('create.namePlaceholder')"
-              @input="onTitleInput"
               @focus="nameFocused = true"
               @blur="nameFocused = false"
             />
@@ -46,35 +44,11 @@
           </div>
         </label>
 
-        <p v-if="nameFocused && !normalized" class="hint">{{ t('create.nameHint') }}</p>
-
-        <div v-if="statusKind" class="status-block">
-          <p class="status" :class="statusKind" role="status">
-            <span v-if="statusKind === 'checking'" class="spinner" aria-hidden="true" />
-            <span v-else-if="statusKind === 'ok'" aria-hidden="true">✓</span>
-            {{ statusText }}
-          </p>
-          <div v-if="statusKind === 'err' && altSlugs.length" class="alts">
-            <button
-              v-for="alt in altSlugs"
-              :key="alt"
-              type="button"
-              class="alt-chip"
-              @click="applyAlt(alt)"
-            >
-              {{ alt }}
-            </button>
-          </div>
-        </div>
+        <p v-if="nameFocused && !displayName" class="hint">{{ t('create.nameHint') }}</p>
 
         <div class="field switch-row">
           <span class="flow-label">{{ t('create.commentRequired') }}</span>
           <van-switch v-model="commentRequired" size="22px" active-color="#bd5825" />
-        </div>
-
-        <div class="field switch-row">
-          <span class="flow-label">{{ t('create.showDate') }}</span>
-          <van-switch v-model="showDate" size="22px" active-color="#bd5825" />
         </div>
 
         <div class="field switch-row">
@@ -84,7 +58,7 @@
       </section>
 
       <section v-else class="step">
-        <p class="chosen-name display-type">{{ normalized }}</p>
+        <p class="chosen-name display-type">{{ displayName }}</p>
 
         <div class="field">
           <span class="flow-label">{{ t('create.planLabel') }}</span>
@@ -97,15 +71,19 @@
               class="plan-card"
               :class="{ selected: planId === id }"
               :aria-checked="planId === id"
-              @click="planId = id"
+              @click="onSelectPlan(id)"
             >
               <span class="plan-name">{{ t(`plan.${id}.name`) }}</span>
               <span class="plan-summary">{{ t(`plan.${id}.summary`) }}</span>
               <span class="plan-price">{{ planPriceLabel(id) }}</span>
             </button>
           </div>
-          <p v-if="planId === 'free'" class="hint">{{ t('create.freeNote') }}</p>
         </div>
+
+        <label class="field">
+          <span class="flow-label">{{ t('create.filmCountLabel') }}</span>
+          <FilmCountPicker v-model="maxPhotos" :max="planFilmCap" />
+        </label>
       </section>
 
       <div class="flow-bottom">
@@ -114,7 +92,7 @@
           v-if="step === 1"
           type="button"
           class="flow-btn primary"
-          :disabled="!slugOk"
+          :disabled="!nameOk"
           @click="step = 2"
         >
           {{ t('create.next') }}
@@ -127,86 +105,100 @@
         >
           {{ submitLabel }}
         </button>
-        <nav class="legal-links" aria-label="legal">
-          <router-link to="/terms">{{ t('common.legal.terms') }}</router-link>
-          <span aria-hidden="true">·</span>
-          <router-link to="/privacy">{{ t('common.legal.privacy') }}</router-link>
-          <span aria-hidden="true">·</span>
-          <router-link to="/legal">{{ t('common.legal.tokusho') }}</router-link>
-        </nav>
       </div>
     </form>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onActivated, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import {
-  normalizeSlug,
-  slugTakenMessage,
-  validateSlugFormat,
-} from '@/lib/reservedSlugs'
-import {
-  generateSlugCandidate,
-  pickAvailableSlugs,
-  withCollisionSuffix,
-} from '@/lib/slugGenerator'
+import HamburgerMenu from '@/components/HamburgerMenu.vue'
+import FilmCountPicker from '@/components/FilmCountPicker.vue'
+import type { AppLocale } from '@/i18n'
+import { generateNameCandidate, NAME_MAX, normalizeDisplayName } from '@/lib/nameGenerator'
 import {
   checkoutCurrency,
+  clampFilmCount,
   DEFAULT_PLAN_ID,
   formatPlanPrice,
+  getPlan,
   type PlanId,
   tripPriceButtonLabel,
 } from '@/lib/tripPlan'
-import { createTripCheckout, isSlugTaken } from '@/lib/tripApi'
+import {
+  clearFreeOrganizerToken,
+  createTripCheckout,
+  deleteFreeTrip,
+  readFreeOrganizerToken,
+  storeFreeOrganizerToken,
+} from '@/lib/tripApi'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const route = useRoute()
 const router = useRouter()
+
+const appLocale = computed(() => locale.value as AppLocale)
 
 const step = ref<1 | 2>(1)
 const titleInput = ref('')
 const planId = ref<PlanId>(DEFAULT_PLAN_ID)
+const maxPhotos = ref(getPlan(DEFAULT_PLAN_ID).maxPhotos)
 const commentRequired = ref(true)
 const showNicknames = ref(false)
-const showDate = ref(true)
 const nameFocused = ref(false)
-const slugError = ref<string | null>(null)
-const slugAvailable = ref(false)
-const checking = ref(false)
 const generating = ref(false)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
-const altSlugs = ref<string[]>([])
+/** Internal slug of FREE trip being upgraded (for purge). */
+const upgradeFreeSlug = ref('')
+
+async function applyUpgradeIntent() {
+  if (String(route.query.upgrade ?? '') !== '1') return
+  const slugFromTrip = String(route.query.slug ?? '').trim()
+  const nameFromTrip = String(route.query.name ?? '').trim()
+  const tokenFromQuery = String(route.query.token ?? '')
+  const token = tokenFromQuery || (slugFromTrip ? readFreeOrganizerToken(slugFromTrip) : '')
+
+  if (nameFromTrip) titleInput.value = nameFromTrip
+  else if (slugFromTrip) titleInput.value = slugFromTrip
+  upgradeFreeSlug.value = slugFromTrip
+
+  if (planId.value === 'free') {
+    planId.value = 'standard'
+    maxPhotos.value = getPlan('standard').maxPhotos
+  }
+  step.value = 2
+  submitError.value = null
+  void router.replace({ path: '/create', query: {} })
+
+  if (slugFromTrip && token) {
+    try {
+      await deleteFreeTrip(slugFromTrip, token)
+      clearFreeOrganizerToken(slugFromTrip)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+}
+
+onActivated(() => {
+  void applyUpgradeIntent()
+})
 
 const planIds: PlanId[] = ['free', 'standard', 'plus']
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
-let checkSeq = 0
-let altSeq = 0
+const planFilmCap = computed(() => getPlan(planId.value).maxPhotos)
 
-const normalized = computed(() => normalizeSlug(titleInput.value))
+function onSelectPlan(id: PlanId) {
+  planId.value = id
+  maxPhotos.value = getPlan(id).maxPhotos
+}
 
-const slugOk = computed(
-  () => Boolean(normalized.value) && !slugError.value && slugAvailable.value && !checking.value,
-)
-
-const canSubmit = computed(() => slugOk.value)
-
-const statusKind = computed<'ok' | 'checking' | 'err' | null>(() => {
-  if (!normalized.value && !checking.value) return null
-  if (checking.value) return 'checking'
-  if (slugError.value) return 'err'
-  if (slugOk.value) return 'ok'
-  return null
-})
-
-const statusText = computed(() => {
-  if (statusKind.value === 'checking') return t('create.checking')
-  if (statusKind.value === 'ok') return t('create.nameOk')
-  return slugError.value ?? ''
-})
+const displayName = computed(() => normalizeDisplayName(titleInput.value))
+const nameOk = computed(() => Boolean(displayName.value))
+const canSubmit = computed(() => nameOk.value)
 
 const submitLabel = computed(() => {
   if (submitting.value) return t('create.preparing')
@@ -218,105 +210,10 @@ function planPriceLabel(id: PlanId) {
   return formatPlanPrice(id)
 }
 
-watch(statusKind, (kind) => {
-  if (kind === 'err' && normalized.value) {
-    void refreshAlts(normalized.value)
-  } else {
-    altSlugs.value = []
-  }
-})
-
-async function refreshAlts(avoid: string) {
-  const seq = ++altSeq
-  const found = await pickAvailableSlugs(2, isSlugTaken, [avoid])
-  if (seq === altSeq) altSlugs.value = found
-}
-
-function onTitleInput() {
-  slugAvailable.value = false
-  altSlugs.value = []
-  const formatErr = validateSlugFormat(titleInput.value)
-  slugError.value = formatErr
-  if (!normalized.value) {
-    checking.value = false
-    return
-  }
-  if (formatErr) {
-    checking.value = false
-    return
-  }
-  scheduleAvailabilityCheck()
-}
-
-function scheduleAvailabilityCheck() {
-  if (debounceTimer) clearTimeout(debounceTimer)
-  checking.value = true
-  debounceTimer = setTimeout(() => {
-    void runAvailabilityCheck(normalized.value)
-  }, 300)
-}
-
-async function runAvailabilityCheck(slug: string) {
-  const seq = ++checkSeq
-  const formatErr = validateSlugFormat(slug)
-  if (formatErr || !slug) {
-    if (seq === checkSeq) {
-      slugError.value = formatErr
-      slugAvailable.value = false
-      checking.value = false
-    }
-    return false
-  }
-  try {
-    const taken = await isSlugTaken(slug)
-    if (seq !== checkSeq) return false
-    if (taken) {
-      slugError.value = slugTakenMessage()
-      slugAvailable.value = false
-    } else {
-      slugError.value = null
-      slugAvailable.value = true
-    }
-    return !taken
-  } catch (e) {
-    console.error(e)
-    if (seq === checkSeq) {
-      slugError.value = t('create.checkFailed')
-      slugAvailable.value = false
-    }
-    return false
-  } finally {
-    if (seq === checkSeq) checking.value = false
-  }
-}
-
-function applyAlt(slug: string) {
-  titleInput.value = slug
-  onTitleInput()
-}
-
-async function onGenerate() {
+function onGenerate() {
   generating.value = true
-  altSlugs.value = []
   try {
-    let candidate = generateSlugCandidate()
-    for (let i = 0; i < 8; i++) {
-      const formatErr = validateSlugFormat(candidate)
-      if (!formatErr) {
-        const taken = await isSlugTaken(candidate)
-        if (!taken) {
-          titleInput.value = candidate
-          slugError.value = null
-          slugAvailable.value = true
-          checking.value = false
-          return
-        }
-      }
-      candidate = i % 2 === 0 ? withCollisionSuffix(candidate) : generateSlugCandidate()
-    }
-    titleInput.value = candidate
-    slugError.value = slugTakenMessage()
-    slugAvailable.value = false
+    titleInput.value = generateNameCandidate(appLocale.value)
   } finally {
     generating.value = false
   }
@@ -327,41 +224,52 @@ async function onSubmit() {
   submitError.value = null
   submitting.value = true
   try {
-    const slug = normalized.value
+    const name = displayName.value
+    const filmCount = clampFilmCount(maxPhotos.value, planId.value)
+    maxPhotos.value = filmCount
+    const freeSlug = upgradeFreeSlug.value
+    const freeToken =
+      planId.value !== 'free'
+        ? freeSlug
+          ? readFreeOrganizerToken(freeSlug)
+          : ''
+        : ''
     const res = await createTripCheckout({
-      slug,
-      name: slug,
+      name,
       plan_id: planId.value,
+      max_photos: filmCount,
       currency: checkoutCurrency(),
+      locale: appLocale.value === 'en' ? 'en' : 'ja',
       reveal_at: null,
       comment_required: commentRequired.value,
       show_nicknames: showNicknames.value,
-      date_format: showDate.value ? 'YY.M.D' : 'none',
+      date_format: 'none',
+      ...(freeToken && freeSlug ? { free_token: freeToken, free_slug: freeSlug } : {}),
     })
-    // FREE はSPA遷移で本ページを KeepAlive に残す（お試し後、同じ設定・同じ名前のまま戻れる）
     if (res.free && res.slug && res.organizer_token) {
+      storeFreeOrganizerToken(res.slug, res.organizer_token)
       submitting.value = false
       void router.push({
         path: '/create/success',
-        query: { free: '1', slug: res.slug, token: res.organizer_token },
+        query: {
+          free: '1',
+          share: res.share_token ?? '',
+          slug: res.slug,
+          name,
+          token: res.organizer_token,
+        },
       })
       return
     }
+    if (freeToken && freeSlug) clearFreeOrganizerToken(freeSlug)
+    upgradeFreeSlug.value = ''
     window.location.href = res.url
   } catch (e) {
     console.error(e)
     submitError.value = e instanceof Error ? e.message : t('create.createFailed')
     submitting.value = false
-    // 失敗理由が slug 重複のことがある（FREE お試し直後など）— 状態を取り直す
-    void runAvailabilityCheck(normalized.value)
   }
 }
-
-onBeforeUnmount(() => {
-  if (debounceTimer) clearTimeout(debounceTimer)
-  checkSeq += 1
-  altSeq += 1
-})
 </script>
 
 <style scoped>
@@ -383,21 +291,28 @@ onBeforeUnmount(() => {
 .head-copy {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
 }
 
 h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: 1.2rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--ink-brown);
+  line-height: 1.35;
 }
 
-.head-copy p {
-  margin: 8px 0 0;
+.flow-step {
+  flex: 0 0 auto;
   font-size: 0.84rem;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .form {
@@ -442,15 +357,20 @@ h1 {
   right: 8px;
   transform: translateY(-50%);
   min-height: 44px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
-  color: var(--text);
+  color: var(--ink-brown);
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 1px 0 rgba(61, 48, 38, 0.06);
+}
+
+.suggest-btn:active:not(:disabled) {
+  background: var(--surface-deep);
 }
 
 .suggest-btn:disabled {
@@ -504,16 +424,17 @@ h1 {
 }
 
 .alt-chip {
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: #fff;
   color: var(--ink-brown);
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 1px 0 rgba(61, 48, 38, 0.06);
 }
 
 .alt-chip:active {
@@ -546,6 +467,12 @@ h1 {
   line-height: 1.35;
 }
 
+.slug-hint {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .plan-cards {
   display: flex;
   flex-direction: column;
@@ -559,18 +486,32 @@ h1 {
   column-gap: 12px;
   row-gap: 2px;
   align-items: center;
-  min-height: 64px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  min-height: 68px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
   background: #fff;
   text-align: left;
   font: inherit;
   cursor: pointer;
+  box-shadow: 0 1px 0 rgba(61, 48, 38, 0.06);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.plan-card:active {
+  background: var(--surface-deep);
 }
 
 .plan-card.selected {
   border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.plan-card.selected:active {
   background: var(--accent-soft);
 }
 
@@ -601,26 +542,6 @@ h1 {
   align-items: center;
   justify-content: space-between;
   padding: 6px 0;
-}
-
-.legal-links {
-  display: flex;
-  flex-wrap: nowrap;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
-.legal-links a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.legal-links span {
-  color: #c4beb5;
 }
 
 .err {

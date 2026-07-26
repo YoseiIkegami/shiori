@@ -5,9 +5,6 @@
       <component :is="Component" />
     </KeepAlive>
   </router-view>
-  <LangSwitcher />
 </template>
 
-<script setup lang="ts">
-import LangSwitcher from '@/components/LangSwitcher.vue'
-</script>
+<script setup lang="ts"></script>

@@ -17,7 +17,7 @@
     </p>
 
     <h2>お問い合わせ先</h2>
-    <p>support@ikg-systems.com</p>
+    <p>support-shiori@ikg-systems.com</p>
 
     <h2>販売価格</h2>
     <p>

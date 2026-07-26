@@ -6,6 +6,8 @@ export type Trip = {
   id: string
   slug: string
   name: string
+  /** Unguessable public URL key (`/t/{share_token}`). */
+  share_token?: string
   reveal_at: string | null
   is_revealed: boolean | null
   photos_count: number

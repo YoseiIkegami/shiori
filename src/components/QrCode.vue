@@ -27,7 +27,14 @@ async function render(url: string) {
     const { default: QRCode } = await import('qrcode')
     if (seq !== renderSeq) return
     const canvas = document.createElement('canvas')
-    await QRCode.toCanvas(canvas, url, { width: props.size, margin: 1 })
+    await QRCode.toCanvas(canvas, url, {
+      width: props.size,
+      margin: 1,
+      color: {
+        dark: '#3D3026',
+        light: '#F8F7F4',
+      },
+    })
     if (seq !== renderSeq) return
     host.appendChild(canvas)
   } catch {

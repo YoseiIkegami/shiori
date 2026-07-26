@@ -107,6 +107,8 @@ body {
   gap: 12px;
   min-height: 66px;
   margin-bottom: 32px;
+  /* 右上に固定表示される HamburgerMenu を避ける */
+  padding-right: 52px;
 }
 
 /* 主ボタンは全画面で下端固定（トップページと同じ重心）。ページ側に .has-flow-bottom を付ける */
@@ -159,7 +161,6 @@ body {
 }
 
 .flow-step {
-  margin-left: auto;
   font-size: 0.76rem;
   color: var(--text-muted);
   white-space: nowrap;

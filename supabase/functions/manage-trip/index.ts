@@ -3,8 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 // Organizer settings page backend. Auth is the secret organizer_token in the URL,
 // verified here with service_role (anon has no UPDATE on trips).
 
-const DATE_FORMATS = new Set(['YY.M.D', 'YYYY.M.D', 'YY.M.D HH:mm', 'none'])
-
 const corsHeaders = (origin: string | null) => {
   const allowed = Deno.env.get('ALLOWED_ORIGIN') ?? '*'
   const requestOrigin = origin ?? ''
@@ -29,7 +27,7 @@ const json = (body: unknown, status: number, headers: Record<string, string>) =>
   })
 
 const TRIP_FIELDS =
-  'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
+  'id, slug, name, share_token, reveal_at, is_revealed, photos_count, max_photos, plan_id, ' +
   'show_nicknames, comment_required, date_format, expires_at, payment_status, organizer_token'
 
 function publicTrip(trip: Record<string, unknown>) {
@@ -38,46 +36,52 @@ function publicTrip(trip: Record<string, unknown>) {
   return rest
 }
 
+async function findTripByKey(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  key: string,
+) {
+  const byShare = await supabase.from('trips').select(TRIP_FIELDS).eq('share_token', key).maybeSingle()
+  if (byShare.data || byShare.error) return byShare
+  return await supabase.from('trips').select(TRIP_FIELDS).eq('slug', key).maybeSingle()
+}
+
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('Origin'))
 
   if (req.method === 'OPTIONS') return new Response('ok', { headers })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, headers)
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, headers)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!supabaseUrl || !serviceRoleKey) return json({ error: 'Server misconfigured' }, 500, headers)
+  if (!supabaseUrl || !serviceRoleKey) return json({ error: 'misconfigured' }, 500, headers)
 
   let body: Record<string, unknown>
   try {
     body = await req.json()
   } catch {
-    return json({ error: 'Invalid JSON' }, 400, headers)
+    return json({ error: 'invalid_json' }, 400, headers)
   }
 
-  const slug = String(body.slug ?? '').trim().toLowerCase()
+  const tripKey = String(body.share_token ?? body.slug ?? '').trim()
   const token = String(body.token ?? '')
   const action = (body.action as string) ?? 'get'
 
-  if (!slug || !token) return json({ error: 'slug and token are required' }, 400, headers)
+  if (!tripKey || !token) return json({ error: 'slug_token_required' }, 400, headers)
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-  const { data: trip, error } = await supabase
-    .from('trips')
-    .select(TRIP_FIELDS)
-    .eq('slug', slug)
-    .maybeSingle()
+  const { data: trip, error } = await findTripByKey(supabase, tripKey)
 
   if (error) {
     console.error('manage-trip lookup error', error)
-    return json({ error: 'Failed to load trip' }, 500, headers)
+    return json({ error: 'load_failed' }, 500, headers)
   }
-  if (!trip) return json({ error: 'Trip not found' }, 404, headers)
+  if (!trip) return json({ error: 'trip_not_found' }, 404, headers)
 
   // Constant-ish check; token is a high-entropy secret so direct compare is fine here.
   if (trip.organizer_token !== token) {
-    return json({ error: 'Invalid token' }, 403, headers)
+    return json({ error: 'invalid_token' }, 403, headers)
   }
 
   if (action === 'get') {
@@ -93,7 +97,7 @@ Deno.serve(async (req) => {
       .single()
     if (endError) {
       console.error('manage-trip end error', endError)
-      return json({ error: 'Failed to end trip' }, 500, headers)
+      return json({ error: 'end_failed' }, 500, headers)
     }
     return json({ trip: publicTrip(updated) }, 200, headers)
   }
@@ -115,9 +119,8 @@ Deno.serve(async (req) => {
     else if (typeof patch.reveal_at === 'string' && patch.reveal_at) update.reveal_at = patch.reveal_at
     if (typeof patch.show_nicknames === 'boolean') update.show_nicknames = patch.show_nicknames
     if (typeof patch.comment_required === 'boolean') update.comment_required = patch.comment_required
-    if (typeof patch.date_format === 'string' && DATE_FORMATS.has(patch.date_format)) {
-      update.date_format = patch.date_format
-    }
+    // 日付スタンプは常時OFF（互換のためカラムのみ更新可・値は none 固定）
+    if ('date_format' in patch) update.date_format = 'none'
 
     if (Object.keys(update).length === 0) {
       return json({ trip: publicTrip(trip) }, 200, headers)
@@ -132,10 +135,10 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error('manage-trip update error', updateError)
-      return json({ error: 'Failed to update trip' }, 500, headers)
+      return json({ error: 'update_failed' }, 500, headers)
     }
     return json({ trip: publicTrip(updated) }, 200, headers)
   }
 
-  return json({ error: 'Unknown action' }, 400, headers)
+  return json({ error: 'unknown_action' }, 400, headers)
 })

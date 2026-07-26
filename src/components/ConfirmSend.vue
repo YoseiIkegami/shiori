@@ -93,7 +93,7 @@ watch(
 
     el.addEventListener('animationend', onFadeEnd)
     // Fallback if animationend is missed (scoped name / browser quirks).
-    fadeFallbackTimer = setTimeout(finishFade, 950)
+    fadeFallbackTimer = setTimeout(finishFade, 800)
   },
 )
 
@@ -121,8 +121,8 @@ onBeforeUnmount(() => {
 
 .confirm.is-fading {
   pointer-events: none;
-  /* Lift until photo bottom clears the top of the viewport, while fading out. */
-  animation: send-fade-out 0.85s ease-out forwards;
+  /* ゆっくり浮き → 加速して画面外へ（ease-out だと着地前に減速してふわっとする） */
+  animation: send-fade-out 0.7s cubic-bezier(0.65, 0, 0.9, 0.2) forwards;
 }
 
 .composed {
@@ -151,11 +151,15 @@ onBeforeUnmount(() => {
 }
 
 @keyframes send-fade-out {
-  from {
+  0% {
     opacity: 1;
     transform: translateY(0);
   }
-  to {
+  35% {
+    opacity: 0.92;
+    transform: translateY(-8vh);
+  }
+  100% {
     opacity: 0;
     /* Photo ~465px tall + top padding — clear past the top edge of the screen. */
     transform: translateY(calc(-100vh - 20px));

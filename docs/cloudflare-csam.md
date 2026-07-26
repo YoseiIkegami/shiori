@@ -31,15 +31,12 @@
 
 ## 定期削除との連携
 
-- `purge-expired-trips` Edge Function を日次 Cron で実行
-- Dashboard → Edge Functions → Schedules、または外部 Cron から
-  `POST /functions/v1/purge-expired-trips` + ヘッダ `x-cron-secret`
-- 初回は `{ "dry_run": true }` で候補だけ確認（`expires_at IS NULL` は対象外）
+- [x] `purge-expired-trips` 日次 Cron 登録済（`0 15 * * *` JST 0:00。手順: [`backend.md`](./backend.md)）
 
 ## 公開前の最終確認
 
-- [ ] オレンジ雲 ON / Full (strict)
-- [ ] CSAM Tool 有効 + 通知先
+- [x] オレンジ雲 ON / Full (strict)（`ikg-systems.com` → Cloudflare、2026-07）
+- [x] CSAM Tool 有効 + 通知先 `support-shiori@ikg-systems.com`
 - [ ] 通報ボタンで非表示になること（`/t/test` で確認）
-- [ ] purge dry_run で本番旅が出てこないこと
-- [ ] 法務3ページの事業者情報を確定文言へ差し替え
+- [x] purge Cron 登録 + 本番旅（`summer-boardgames` / `test`）が候補に出ないこと
+- [x] 法務の問い合わせ先 `support-shiori@ikg-systems.com`

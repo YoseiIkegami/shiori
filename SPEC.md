@@ -79,7 +79,7 @@ photos (
 | 全体 | 1200 × 1800 px |
 | 写真エリア | 1080 × 1440 px（上・左右マージン 60px） |
 | 下部コメント欄 | 残り 300px |
-| 撮影日スタンプ | 写真エリア**内側**右下（余白約22px）。フォーマットは **`'YY.M.D`（2桁年・ゼロ埋めなし・時刻なし。例: `'26.7.17`）** が正本（実装 `formatCaptureStamp`）。**DSEG7 Classic Italic**（細め斜体7セグ）・半透明オレンジ＋ごく薄い光暈。主張を抑えてフィルム焼き込み風 |
+| 撮影日スタンプ | **なし（常に非表示）**。`date_format` は常に `none`。UI オプションも設けない |
 | カメラUI | 近未来の使い捨てカメラ。白い**本体外枠**（濃い落ち影）の内側にクリーム紙フレーム・カウンター・3ボタン。シアン発光のチャージドットは外枠右上。撮影エリア内にHUD装飾なし |
 
 ### 技術スタック
@@ -249,35 +249,33 @@ Phase 1（個人MVP）の本番利用が成功したため、サービスとし�
 
 | 設定項目 | デフォルト | 変更可否 | 備考 |
 |---|---|---|---|
-| トリップ名（=slug） | 必須入力 | 発行時のみ | タイトルがそのまま公開 URL の slug になる |
+| トリップ名（`name`） | 必須入力 | 発行後も幹事画面で変更可 | 表示名。言語・文字種の制限なし（前後空白除去・最大60文字）。**公開 URL には使わない** |
 | 上限枚数 | 50枚 | 可 | 既存 `max_photos` |
 | 終了時刻 | なし（任意） | 可 | 枚数 OR 時刻、**どちらか先に達したら終了** |
 | 投稿者名の表示 | OFF | 可 | ニックネーム方式（4章） |
 | コメント必須 | ON | 可 | OFF で空コメント投稿可 |
-| 日付フォーマット | `'YY.M.D` | 可 | 選択式。変更は以降の写真から反映（撮影済みは焼き込み時のまま） |
+| 日付フォーマット | `none` | 不可 | 常に非表示。UI・幹事設定から削除 |
 | 保存期間 | 7日 | 発行時のみ | 発行後の延長は追加決済（将来） |
 
-### 3. slug（タイトル＝URL）
+### 3. 公開 URL（`share_token`）と内部 slug
 
-- 公開 URL は `/t/{slug}`、幹事 URL は `/manage/{slug}?token={短縮トークン}`
-- slug は既存カラム（`trips.slug`、UNIQUE）を継続利用。既存 `summer-boardgames` / `test` はそのまま維持
-- バリデーション: 英数字とハイフンのみ / 3〜30文字 / 大文字小文字は区別せず保存時に小文字正規化
-- 予約語（`create` / `manage` / `test` / `admin` 等、ルート衝突しうる語）は **新規作成時のみ** 使用不可。予約語は `src/lib/reservedSlugs.ts` に集約
-- 重複チェック: `/create` で入力変更時にデバウンス（300ms）で `trips` を anon SELECT。重複時は **「この名前はすでに使われています」**、形式不正は **「英数字とハイフンで 3〜30文字」** を表示し次へを非活性
-- サーバー側（`create-trip-checkout`）でも正規化・予約語・UNIQUE 違反を再検証（レース対策）
-- `/create` は 2 ステップ（なまえ → 旅の設定）。設定ステップでおすすめ値を明示する
+- **公開 URL** は `/t/{share_token}`。`share_token` は推測不能な base62（約22文字、`generate_short_token(22)`）
+- **幹事 URL** は `/manage/{share_token}?token={organizer_token}`
+- **`name`** は人間向けの旅のなまえ（重複可・言語自由）
+- **`slug`** はサーバが発行する内部 UNIQUE キー（レガシー `/t/{slug}` 互換・FREE アップグレード回収用）。ユーザーは入力しない
+- 互換: lookup は `share_token` → レガシー `slug` → UUID の順。新規共有文面は常に `share_token`
+- `/create` は 2 ステップ（なまえ → プラン）。なまえに重複チェック・英数字縛りはしない
 
-### 4. タイトルジェネレーター
+### 4. タイトル提案
 
-- `/create` のタイトル欄右の「提案」ボタンで候補を自動生成（旅・思い出テーマの単語をハイフン連結、例 `kaze-tabi`）
-- 生成直後に重複チェック。衝突時は末尾に2桁数字付与または別組み合わせで数回リトライ
+- `/create` の「提案」は表示名の候補を出す（ロケール別の単語組み合わせ。重複チェック不要）
 - 何度でも再生成でき、生成後も手動編集可
 
 ### 5. 日付フォーマット（`date_format`）
 
-- デフォルト `'YY.M.D`（Phase 1 実装 `formatCaptureStamp` と一致。ゼロ埋めなし）
-- 許容値例: `'YY.M.D` / `'YYYY.M.D` / `'YY.M.D HH:mm` / `none`（日付非表示）
-- 焼き込み済みの写真は当時のフォーマットのまま（後から変えても再焼き込みしない）
+- **常に `none`（日付非表示）**。作成・幹事 UI に日付オプションは置かない
+- DB カラム `date_format` は互換のため残すが、新規発行は `none` 固定。クライアント合成も常にスタンプなし
+- 過去に焼き込まれた写真はそのまま（再合成しない）
 
 ### 6. ニックネーム（詳細は 2b で実装）
 
@@ -292,16 +290,17 @@ Phase 1（個人MVP）の本番利用が成功したため、サービスとし�
    ＋ Stripe Checkout Session を作成し URL を返す
 3. Stripe Checkout で支払い（Apple Pay / Google Pay / カード）
 4. stripe-webhook（checkout.session.completed）→ orders INSERT、trips.payment_status='paid'、expires_at 設定
-   （幹事メール送信は差し込み口のみ。Resend 連携は次フェーズ）
+   ＋ Resend で幹事へ共有URL・幹事URLを送信（Stripe 側領収メールは Dashboard 設定）
 5. success_url で共有リンク＋幹事用 URL（token 付き）を表示
 ```
 
+- Stripe Checkout Session にはアプリ locale に応じた `locale`（`ja` / `en`）を渡す
 - 未払い（pending）trip は投稿・閲覧とも不可（Edge Function・RLS 両方でガード）
-- 幹事リンクは秘密トークン付き。紛失時の復旧はメール送信フェーズで補強する予定
+- 幹事リンクは秘密トークン付き。紛失時は決済時メールで復旧
 
 ### 8. 幹事用設定ページ
 
-- `/manage/{slug}?token={organizer_token}`（ログイン不要の秘密 URL 方式）
+- `/manage/{share_token}?token={organizer_token}`（ログイン不要の秘密 URL 方式）
 - 設定変更 / 共有リンク・QR 表示 / 投稿枚数確認 / 手動終了（強制解禁）
 - token 照合は `manage-trip`（Edge Function）で行う。anon の `trips` UPDATE は許可しない
 
@@ -311,15 +310,16 @@ Phase 1（個人MVP）の本番利用が成功したため、サービスとし�
 -- trips 拡張
 alter table trips add column show_nicknames  boolean not null default false;
 alter table trips add column comment_required boolean not null default true;
-alter table trips add column date_format      text    not null default 'YY.M.D';
-alter table trips add column expires_at       timestamptz;                 -- 削除バッチ参照（NULL は対象外）
-alter table trips add column payment_status   text    not null default 'pending'; -- 'pending' | 'paid'
+alter table trips add column date_format      text    not null default 'none';
+alter table trips add column expires_at       timestamptz;
+alter table trips add column payment_status   text    not null default 'pending';
 alter table trips add column theme_id         text    not null default 'classic';
--- organizer_token は短縮 base62（約10文字）。UUID ではなく generate_short_token()
--- reveal_at は nullable に変更し「終了時刻オプション」として再利用（設定時のみ時刻条件で解禁）
+alter table trips add column share_token      text    not null; -- generate_short_token(22), UNIQUE
+-- organizer_token は短縮 base62（約10文字）
+-- reveal_at は nullable（終了時刻オプション）
 
 -- 既存 trip 保護（マイグレーションでバックフィル）
-update trips set payment_status = 'paid', expires_at = null;  -- summer-boardgames / test を維持
+update trips set payment_status = 'paid', expires_at = null;
 
 -- 投稿者（ニックネーム）
 create table members (

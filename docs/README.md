@@ -17,7 +17,7 @@
 |---|---|
 | [プロダクト概要](./product.md) | コンセプト・ユーザー体験の全体像 |
 | [画面一覧](./screens.md) | ルート・各画面の役割と UI |
-| [撮影・解禁フロー](./camera-flow.md) | `/t/{slug}` の撮影〜ボード閲覧 |
+| [撮影・解禁フロー](./camera-flow.md) | `/t/{share_token}` の撮影〜ボード閲覧 |
 | [旅のライフサイクル](./trip-lifecycle.md) | 作成・決済・共有・終了 |
 | [旅の設定項目](./trip-settings.md) | 幹事が変更できるパラメータ |
 | [決済（Stripe）](./payment.md) | 価格・Checkout・Webhook・テスト |
@@ -28,14 +28,16 @@
 | [多言語](./i18n.md) | vue-i18n・locale・通貨 |
 | [Cloudflare / CSAM](./cloudflare-csam.md) | プロキシ・スキャン・削除 Cron 手順 |
 | [実装状況](./implementation-status.md) | 完了分と残 TODO |
+| [Harness（SHIORI overlay）](./harness-cookbook.md) | エージェント配線。原則は `agent-harness-kit` |
+| [課題管理](./issues.md) | 残課題・優先順・ステータス |
 
 ## クイックリファレンス
 
 | 項目 | 値 |
 |---|---|
 | 本番 URL | https://shiori.ikg-systems.com |
-| 旅 URL | `/t/{slug}` |
-| 幹事 URL | `/manage/{slug}?token={organizer_token}` |
+| 旅 URL | `/t/{share_token}`（互換でレガシー slug も解決） |
+| 幹事 URL | `/manage/{share_token}?token={organizer_token}` |
 | 基準価格 | ¥150（`STRIPE_BASE_AMOUNT` / `VITE_STRIPE_BASE_AMOUNT`） |
 | デフォルト枚数 | 50 枚 |
 | 保存期間 | 7 日（決済完了時に `expires_at` 設定） |

@@ -2,7 +2,8 @@
 
 届くまで開かない、旅のポラロイド。共有リンクから写真＋コメントを投稿し、枚数が揃うと同じ URL で一斉に見られます。
 
-**ドキュメント**: 現行仕様の整理版は [`docs/`](./docs/README.md)。設計の正本は [`SPEC.md`](./SPEC.md)。
+**ドキュメント**: 現行仕様の整理版は [`docs/`](./docs/README.md)。設計の正本は [`SPEC.md`](./SPEC.md)。  
+**エージェント**: [`AGENTS.md`](./AGENTS.md)。汎用 harness は隣接リポ [`agent-harness-kit`](../agent-harness-kit/)。
 
 ## 技術スタック
 

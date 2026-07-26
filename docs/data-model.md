@@ -7,15 +7,16 @@
 | カラム | 型 | 説明 |
 |---|---|---|
 | `id` | uuid | PK |
-| `slug` | text | UNIQUE。公開 URL 用 |
-| `name` | text | 表示名 |
+| `slug` | text | UNIQUE。内部キー（レガシー URL・FREE 回収用）。ユーザー非表示 |
+| `share_token` | text | UNIQUE。公開入場キー `/t/{share_token}`（約22文字） |
+| `name` | text | 表示名（言語自由・重複可・最大60文字） |
 | `reveal_at` | timestamptz? | 終了時刻（任意） |
 | `is_revealed` | boolean | 解禁済みか |
 | `photos_count` | int | トリガーで加算 |
 | `max_photos` | int | 上限（default 50） |
 | `show_nicknames` | boolean | ニックネーム表示（2b） |
 | `comment_required` | boolean | コメント必須 |
-| `date_format` | text | 日付焼き込み形式 |
+| `date_format` | text | 常に `none`（日付非表示。互換カラム） |
 | `expires_at` | timestamptz? | 削除予定日（NULL=対象外） |
 | `payment_status` | text | `pending` \| `paid` |
 | `theme_id` | text | default `classic` |

@@ -4,21 +4,17 @@
       <button type="button" class="back" :aria-label="t('common.back')" @click="goBack">←</button>
       <h1 class="display-type">{{ title }}</h1>
     </header>
+    <HamburgerMenu />
     <article class="legal-body">
       <slot />
     </article>
-    <!-- replace: 法務ページ間の移動で履歴を積まない（戻る一発で遷移元へ） -->
-    <nav class="legal-nav">
-      <router-link replace to="/terms">{{ t('common.legal.terms') }}</router-link>
-      <router-link replace to="/privacy">{{ t('common.legal.privacy') }}</router-link>
-      <router-link replace to="/legal">{{ t('common.legal.tokusho') }}</router-link>
-    </nav>
   </main>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import HamburgerMenu from '@/components/HamburgerMenu.vue'
 
 const { t } = useI18n()
 
@@ -54,6 +50,8 @@ function goBack() {
 }
 
 .legal-head h1 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.35rem;
@@ -87,24 +85,5 @@ function goBack() {
   margin-top: 2em;
   font-size: 0.78rem;
   color: var(--text-muted);
-}
-
-.legal-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 36px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-  font-size: 0.82rem;
-}
-
-.legal-nav a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.legal-nav a.router-link-active {
-  color: var(--ink-brown);
 }
 </style>

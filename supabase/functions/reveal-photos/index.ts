@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   }
 
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+    return new Response(JSON.stringify({ error: 'method_not_allowed' }), {
       status: 405,
       headers: { ...headers, 'Content-Type': 'application/json' },
     })
@@ -33,13 +33,10 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const tripKey = (body?.trip_id ?? body?.slug) as string | undefined
-    // Debug / design preview: allow browsing before count unlock.
-    // Remove together with the in-app 「開始後」toggle before public launch.
-    const preview = body?.preview === true
+    const tripKey = (body?.trip_id ?? body?.share_token ?? body?.slug) as string | undefined
 
     if (!tripKey || typeof tripKey !== 'string') {
-      return new Response(JSON.stringify({ error: 'trip_id is required' }), {
+      return new Response(JSON.stringify({ error: 'trip_id_required' }), {
         status: 400,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -49,7 +46,7 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!supabaseUrl || !serviceRoleKey) {
-      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      return new Response(JSON.stringify({ error: 'misconfigured' }), {
         status: 500,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -62,13 +59,19 @@ Deno.serve(async (req) => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
     const tripSelect =
-      'id, slug, name, reveal_at, is_revealed, photos_count, max_photos, payment_status, show_nicknames, date_format'
+      'id, slug, name, share_token, reveal_at, is_revealed, photos_count, max_photos, payment_status, show_nicknames, date_format'
 
     let { data: trip, error: tripError } = await supabase
       .from('trips')
       .select(tripSelect)
-      .eq('slug', tripKey)
+      .eq('share_token', tripKey)
       .maybeSingle()
+
+    if (!trip && !tripError) {
+      const bySlug = await supabase.from('trips').select(tripSelect).eq('slug', tripKey).maybeSingle()
+      trip = bySlug.data
+      tripError = bySlug.error
+    }
 
     // UUID fallback only when key looks like a UUID (avoids 22P02 on slugs like "test").
     if (!trip && !tripError && uuidRe.test(tripKey)) {
@@ -83,22 +86,22 @@ Deno.serve(async (req) => {
 
     if (tripError) {
       console.error('trip lookup error', tripError)
-      return new Response(JSON.stringify({ error: 'Failed to load trip' }), {
+      return new Response(JSON.stringify({ error: 'load_failed' }), {
         status: 500,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
     }
 
     if (!trip) {
-      return new Response(JSON.stringify({ error: 'Trip not found' }), {
+      return new Response(JSON.stringify({ error: 'trip_not_found' }), {
         status: 404,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
     }
 
     // Unpaid trips are not viewable (Phase 2 gate). Backfilled trips are 'paid'.
-    if (trip.payment_status !== 'paid' && !preview) {
-      return new Response(JSON.stringify({ error: 'Trip is not paid' }), {
+    if (trip.payment_status !== 'paid') {
+      return new Response(JSON.stringify({ error: 'trip_not_paid' }), {
         status: 402,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -116,9 +119,8 @@ Deno.serve(async (req) => {
     }
 
     // Count-based reveal is finalized by the database trigger; time-based handled above.
-    // `preview` is only for the temporary debug toggle.
-    if (trip.is_revealed !== true && !preview) {
-      return new Response(JSON.stringify({ error: 'Trip is not revealed yet' }), {
+    if (trip.is_revealed !== true) {
+      return new Response(JSON.stringify({ error: 'trip_not_revealed' }), {
         status: 403,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -133,7 +135,7 @@ Deno.serve(async (req) => {
 
     if (photosError) {
       console.error('photos lookup error', photosError)
-      return new Response(JSON.stringify({ error: 'Failed to load photos' }), {
+      return new Response(JSON.stringify({ error: 'photos_load_failed' }), {
         status: 500,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -221,16 +223,16 @@ Deno.serve(async (req) => {
           id: trip.id,
           slug: trip.slug,
           name: trip.name,
+          share_token: trip.share_token,
           reveal_at: trip.reveal_at,
           is_revealed: trip.is_revealed === true,
           photos_count: trip.photos_count,
           max_photos: trip.max_photos,
           payment_status: trip.payment_status,
           show_nicknames: trip.show_nicknames === true,
-          date_format: trip.date_format ?? 'YY.M.D',
+          date_format: trip.date_format ?? 'none',
         },
         photos: withUrls.filter((p) => p.url),
-        preview: preview && trip.is_revealed !== true,
       }),
       {
         status: 200,
@@ -239,7 +241,7 @@ Deno.serve(async (req) => {
     )
   } catch (err) {
     console.error('reveal-photos error', err)
-    return new Response(JSON.stringify({ error: 'Internal error' }), {
+    return new Response(JSON.stringify({ error: 'internal_error' }), {
       status: 500,
       headers: { ...headers, 'Content-Type': 'application/json' },
     })

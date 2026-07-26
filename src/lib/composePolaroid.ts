@@ -25,17 +25,17 @@ const BASE_FONT_SIZE = 48
 const MIN_FONT_SIZE = 28
 const TEXT_PAD_X = 72
 const DATE_FONT_SIZE = 34
-/** Film-camera LED orange — drawn with alpha so it sits in the photo. */
-const DATE_COLOR = 'rgba(255, 107, 53, 0.78)'
+/** Camcorder / film data-back LED (solid amber — not a bloom stack). */
+const DATE_COLOR = 'rgba(255, 98, 0, 0.9)'
 const DATE_MARGIN = 22
-/** 7-segment LCD italic (self-hosted DSEG7 Classic Italic — regular weight). */
+/** 7-segment LCD italic (self-hosted DSEG7 Classic Italic). */
 const DATE_FONT_FAMILY = '"DSEG7 Classic", monospace'
 const JPEG_QUALITY = 0.9
 
 /** Instant-camera style local date stamp. Respects trip `date_format`. */
 export function formatCaptureStamp(
   at: Date = new Date(),
-  dateFormat: DateFormat = 'YY.M.D',
+  dateFormat: DateFormat = 'none',
 ): string {
   if (dateFormat === 'none') return ''
   const y2 = String(at.getFullYear()).slice(-2)
@@ -53,10 +53,7 @@ export function formatCaptureStamp(
 
 async function ensureFontsReady(sizePx: number): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts?.load) return
-  await Promise.all([
-    document.fonts.load(`${sizePx}px ${FONT_FAMILY}`),
-    document.fonts.load(`italic ${DATE_FONT_SIZE}px "DSEG7 Classic"`),
-  ])
+  await document.fonts.load(`${sizePx}px ${FONT_FAMILY}`)
   await document.fonts.ready
 }
 
@@ -68,8 +65,9 @@ function clearTextShadow(ctx: CanvasRenderingContext2D) {
 }
 
 /**
- * Film LED stamp: smaller italic 7-seg, soft bloom, slight translucency.
- * Tuned to feel burned into the exposure (not a neon UI overlay).
+ * Film / camcorder data-back stamp (common recipe):
+ * solid amber + tiny same-color glow. No multi-pass bloom.
+ * @see vintage date-stamp tools (LED red / amber, bottom-right)
  */
 function drawCaptureStamp(
   ctx: CanvasRenderingContext2D,
@@ -80,21 +78,12 @@ function drawCaptureStamp(
   ctx.textAlign = 'right'
   ctx.textBaseline = 'bottom'
   ctx.font = `italic ${DATE_FONT_SIZE}px ${DATE_FONT_FAMILY}`
-
-  // Very soft light bloom (halation) — keep tight so it doesn’t shout.
-  ctx.shadowColor = 'rgba(255, 100, 45, 0.35)'
+  ctx.fillStyle = DATE_COLOR
+  ctx.shadowColor = 'rgba(255, 98, 0, 0.45)'
   ctx.shadowBlur = 2
   ctx.shadowOffsetX = 0
   ctx.shadowOffsetY = 0
-  ctx.fillStyle = DATE_COLOR
   ctx.fillText(text, x, y)
-
-  // Thin dark whisper for bright backgrounds only — almost invisible.
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.22)'
-  ctx.shadowBlur = 1
-  ctx.shadowOffsetY = 0.5
-  ctx.fillText(text, x, y)
-
   clearTextShadow(ctx)
 }
 
@@ -200,7 +189,7 @@ export async function composePolaroid(
   commentText: string,
   filterMode: FilterMode = 'orange',
   capturedAt: Date = new Date(),
-  dateFormat: DateFormat = 'YY.M.D',
+  dateFormat: DateFormat = 'none',
 ): Promise<Blob> {
   await ensureFontsReady(BASE_FONT_SIZE)
 

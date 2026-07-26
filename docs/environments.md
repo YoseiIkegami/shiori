@@ -1,6 +1,6 @@
 # 環境・デプロイ
 
-フロントは同一ドメインの SPA。旅（trip）ごとに URL（`/t/{slug}`）が分かれる。  
+フロントは同一ドメインの SPA。旅（trip）ごとに URL（`/t/{share_token}`）が分かれる。  
 エージェント向けの短い制約は [`.cursor/rules/deploy-environments.mdc`](../.cursor/rules/deploy-environments.mdc)。本ドキュメントが手順の正本。
 
 ## 環境の定義
@@ -47,7 +47,7 @@ https://shiori.ikg-systems.com/t/test
 
 ### SPA ルーティング
 
-[`vercel.json`](../vercel.json) で全パスを `index.html` に rewrite。`/t/{slug}` や `/manage/...` はクライアント側ルータが処理する。
+[`vercel.json`](../vercel.json) で全パスを `index.html` に rewrite。`/t/{share_token}` や `/manage/...` はクライアント側ルータが処理する。
 
 ## バックエンド（Supabase）
 

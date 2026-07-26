@@ -70,21 +70,20 @@
 
 ### その他
 
-- [ ] `/t/test` 検証トグル除去（本番公開前）
-- [ ] `reveal-photos` の `preview` モード除去
 - [ ] 保存期間延長の追加決済
 - [ ] ホームの実写デモボード画像（現状 CSS モック）
-- [ ] 幹事メール Resend 本番連携
-- [ ] 法務ページの事業者情報の確定差し替え
-- [ ] `purge-expired-trips` の日次 Cron 登録（Dashboard）
-- [ ] Cloudflare オレンジ雲 / CSAM の実作業（人手）
+- [ ] Resend API キー・送信ドメイン設定（コードは済み。From 例: `SHIORI <support-shiori@ikg-systems.com>`）
+- [x] 法務ページの事業者情報（問い合わせ `support-shiori@ikg-systems.com`）
+- [x] `purge-expired-trips` の日次 Cron 登録（`0 15 * * *` JST 0:00。手順: [`backend.md`](./backend.md)）
+- [ ] Cloudflare オレンジ雲 / CSAM の実作業（人手。通知先は support-shiori@）
+- [ ] Stripe Dashboard の顧客領収メール有効化（運用）
 
 ## 既知の制約
 
 | 項目 | 内容 |
 |---|---|
-| slug 変更 | 発行後不可 |
+| slug 変更 | 発行後不可（表示名。入場キーは `share_token`） |
 | pending trip | 決済完了まで使用不可。Webhook 失敗時は success で待機表示 |
-| レガシー UUID URL | `/t/{uuid}` も動作するが新規は slug 推奨 |
-| 幹事メール | Webhook stub のみ。Resend 本番連携は未着手 |
+| レガシー URL | `/t/{slug}`・`/t/{uuid}` も解決。新規共有は `share_token` |
+| 幹事メール | Resend 実装済み。`RESEND_API_KEY` 未設定時は no-op |
 | 通報 | 非表示のみ。再表示は SQL / 運営作業 |

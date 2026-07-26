@@ -20,46 +20,16 @@
         >
           <div class="polaroid" :class="`scene-${slide.id}`">
             <div class="frame" aria-hidden="true">
-              <svg v-if="slide.id === 'shoot'" viewBox="0 0 120 140" class="illust">
-                <rect x="22" y="18" width="76" height="88" rx="4" fill="#fffdf8" stroke="#d8cfc2" />
-                <rect x="30" y="26" width="60" height="58" fill="url(#g1)" />
-                <circle class="lens-ring" cx="60" cy="52" r="14" fill="none" stroke="#fff" stroke-width="2.5" opacity="0.85" />
-                <circle class="lens-core" cx="60" cy="52" r="5" fill="#fff" opacity="0.9" />
-                <rect x="38" y="94" width="44" height="4" rx="2" fill="#e8dfd2" />
-                <defs>
-                  <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#7f989b" />
-                    <stop offset="55%" stop-color="#e5cfaa" />
-                    <stop offset="100%" stop-color="#567d80" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <svg v-else-if="slide.id === 'seal'" viewBox="0 0 120 140" class="illust">
-                <rect x="18" y="28" width="84" height="78" rx="3" fill="#f3ebe0" stroke="#d8cfc2" />
-                <path d="M18 40 L60 68 L102 40" fill="none" stroke="#c4b5a0" stroke-width="2" />
-                <g class="seal-badge">
-                  <rect x="48" y="58" width="24" height="24" rx="12" fill="#bd5825" opacity="0.85" />
-                  <path d="M54 70 L58 74 L66 64" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" />
-                </g>
-              </svg>
-              <svg v-else viewBox="0 0 120 140" class="illust">
-                <g transform="translate(8 22) rotate(-8 28 36)">
-                  <rect width="52" height="64" rx="3" fill="#fffdf8" stroke="#d8cfc2" />
-                  <rect x="5" y="5" width="42" height="40" fill="#a6b6ba" />
-                </g>
-                <g transform="translate(36 16) rotate(4 28 36)">
-                  <rect width="52" height="64" rx="3" fill="#fffdf8" stroke="#d8cfc2" />
-                  <rect x="5" y="5" width="42" height="40" fill="#d4a67c" />
-                </g>
-                <g transform="translate(62 28) rotate(12 28 36)">
-                  <g class="fan-sway">
-                    <rect width="52" height="64" rx="3" fill="#fffdf8" stroke="#d8cfc2" />
-                    <rect x="5" y="5" width="42" height="40" fill="#879fab" />
-                  </g>
-                </g>
-              </svg>
+              <img
+                class="illust"
+                :src="`/illustrations/howto-${slide.id}.webp`"
+                alt=""
+                width="360"
+                height="420"
+                decoding="async"
+                :loading="i === 0 ? 'eager' : 'lazy'"
+              />
             </div>
-            <p class="cap handwriting">{{ t(`home.howto.${slide.id}.caption`) }}</p>
           </div>
           <p class="title">{{ t(`home.howto.${slide.id}.title`) }}</p>
           <p class="body">{{ t(`home.howto.${slide.id}.body`) }}</p>
@@ -138,26 +108,38 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .howto {
-  width: min(78vw, 280px);
-  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+  max-width: min(100%, 360px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  container-type: size;
   touch-action: pan-y;
   user-select: none;
 }
 
 .viewport {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
+  container-type: size;
 }
 
 .track {
   display: flex;
+  height: 100%;
   transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .slide {
   flex: 0 0 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   opacity: 0.35;
   transform: scale(0.92);
@@ -171,14 +153,17 @@ onBeforeUnmount(() => {
   transform: scale(1);
 }
 
+/* タイトル・本文ぶんを残して、枠内いっぱいに挿絵 */
 .polaroid {
-  width: 148px;
-  padding: 10px 10px 14px;
+  width: min(90cqw, calc((100cqh - 4.6rem) * 6 / 7));
+  max-width: 280px;
+  padding: clamp(6px, 1.8cqw, 14px);
   background: #fffdf8;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 12px 24px rgba(72, 54, 34, 0.14);
+    0 12px 28px rgba(72, 54, 34, 0.16);
   transform: rotate(-2deg);
+  box-sizing: border-box;
 }
 
 .polaroid.scene-seal {
@@ -200,36 +185,33 @@ onBeforeUnmount(() => {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.cap {
-  margin: 8px 0 0;
-  font-size: 0.78rem;
-  color: var(--ink-brown);
-  letter-spacing: 0.04em;
+  object-fit: cover;
 }
 
 .title {
-  margin: 12px 0 0;
+  flex: 0 0 auto;
+  margin: clamp(8px, 1.8cqh, 14px) 0 0;
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: clamp(1rem, 2.4cqh + 0.55rem, 1.4rem);
   font-weight: 500;
   letter-spacing: 0.08em;
   color: var(--ink-brown);
 }
 
 .body {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  font-size: clamp(0.8rem, 1.6cqh + 0.5rem, 1.05rem);
   color: var(--text-muted);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .dots {
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   gap: 4px;
-  margin-top: 12px;
+  margin-top: clamp(4px, 1.2cqh, 12px);
 }
 
 .dot {
@@ -261,62 +243,5 @@ onBeforeUnmount(() => {
 .dot.active::after {
   width: 20px;
   background: var(--accent);
-}
-
-.lens-ring {
-  transform-origin: 60px 52px;
-  animation: howto-lens 3.6s ease-in-out infinite;
-}
-
-.seal-badge {
-  transform-origin: 60px 70px;
-  animation: howto-seal 3.2s ease-in-out infinite;
-}
-
-.fan-sway {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: howto-fan 4.2s ease-in-out infinite;
-}
-
-@keyframes howto-lens {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.85;
-  }
-  50% {
-    transform: scale(1.12);
-    opacity: 1;
-  }
-}
-
-@keyframes howto-seal {
-  0%,
-  86%,
-  100% {
-    transform: scale(1);
-  }
-  92% {
-    transform: scale(1.14);
-  }
-}
-
-@keyframes howto-fan {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(3deg) translateY(-1.5px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lens-ring,
-  .seal-badge,
-  .fan-sway {
-    animation: none;
-  }
 }
 </style>

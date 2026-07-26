@@ -17,7 +17,6 @@ const RESERVED_SLUGS = new Set([
 ])
 
 const SLUG_RE = /^[a-z0-9-]{3,30}$/
-const DATE_FORMATS = new Set(['YY.M.D', 'YYYY.M.D', 'YY.M.D HH:mm', 'none'])
 
 type PlanId = 'free' | 'standard' | 'plus'
 type Currency = 'jpy' | 'usd'
@@ -65,9 +64,10 @@ function normalizeSlug(raw: unknown): string {
   return String(raw ?? '').trim().toLowerCase()
 }
 
+/** Machine-readable codes; client maps via i18n (`slug.*`). */
 function slugError(slug: string): string | null {
-  if (!SLUG_RE.test(slug)) return '英数字とハイフンで 3〜30文字'
-  if (RESERVED_SLUGS.has(slug)) return 'この名前は使えません'
+  if (!SLUG_RE.test(slug)) return 'slug_format'
+  if (RESERVED_SLUGS.has(slug)) return 'slug_reserved'
   return null
 }
 
@@ -79,17 +79,113 @@ function parseCurrency(raw: unknown): Currency {
   return String(raw ?? '').toLowerCase() === 'usd' ? 'usd' : 'jpy'
 }
 
+const NAME_MAX = 60
+
+function normalizeDisplayName(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, NAME_MAX)
+}
+
+function randomInternalSlug(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = new Uint8Array(12)
+  crypto.getRandomValues(bytes)
+  let out = 't'
+  for (let i = 0; i < bytes.length; i++) {
+    out += alphabet[bytes[i]! % alphabet.length]
+  }
+  return out
+}
+
+async function allocateSlug(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+): Promise<string | null> {
+  for (let i = 0; i < 10; i++) {
+    const candidate = randomInternalSlug()
+    if (RESERVED_SLUGS.has(candidate) || slugError(candidate)) continue
+    const { data } = await supabase.from('trips').select('id').eq('slug', candidate).maybeSingle()
+    if (!data) return candidate
+  }
+  return null
+}
+
+type FreePurgeResult =
+  | { ok: true }
+  | { ok: false; status: number; error: string }
+
+async function purgeFreeTrip(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  slug: string,
+  token: string,
+): Promise<FreePurgeResult> {
+  if (!slug || !token) return { ok: false, status: 400, error: 'slug_token_required' }
+  let { data: trip, error } = await supabase
+    .from('trips')
+    .select('id, plan_id, organizer_token')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (!trip && !error) {
+    const byShare = await supabase
+      .from('trips')
+      .select('id, plan_id, organizer_token')
+      .eq('share_token', slug)
+      .maybeSingle()
+    trip = byShare.data
+    error = byShare.error
+  }
+  if (error) return { ok: false, status: 500, error: 'load_failed' }
+  if (!trip) return { ok: true }
+  if (trip.organizer_token !== token) return { ok: false, status: 403, error: 'invalid_token' }
+  if (trip.plan_id !== 'free') return { ok: false, status: 400, error: 'not_free_trip' }
+
+  const bucket = 'trip-photos'
+  const { data: entries, error: listError } = await supabase.storage
+    .from(bucket)
+    .list(trip.id, { limit: 1000 })
+  if (listError) {
+    console.error('delete_free storage list error', trip.id, listError)
+  }
+  const paths = (entries ?? [])
+    .filter((e: { name?: string }) => e.name && !e.name.endsWith('/'))
+    .map((e: { name: string }) => `${trip.id}/${e.name}`)
+  if (paths.length) {
+    const { error: removeError } = await supabase.storage.from(bucket).remove(paths)
+    if (removeError) console.error('delete_free storage remove error', trip.id, removeError)
+  }
+
+  const { error: photosError } = await supabase.from('photos').delete().eq('trip_id', trip.id)
+  if (photosError) {
+    console.error('delete_free photos error', trip.id, photosError)
+    return { ok: false, status: 500, error: 'delete_failed' }
+  }
+  const { error: membersError } = await supabase.from('members').delete().eq('trip_id', trip.id)
+  if (membersError) {
+    console.error('delete_free members error', trip.id, membersError)
+    return { ok: false, status: 500, error: 'delete_failed' }
+  }
+  const { error: deleteError } = await supabase.from('trips').delete().eq('id', trip.id)
+  if (deleteError) {
+    console.error('delete_free trip error', trip.id, deleteError)
+    return { ok: false, status: 500, error: 'delete_failed' }
+  }
+  return { ok: true }
+}
+
 Deno.serve(async (req) => {
   const headers = corsHeaders(req.headers.get('Origin'))
 
   if (req.method === 'OPTIONS') return new Response('ok', { headers })
-  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, headers)
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, headers)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
   if (!supabaseUrl || !serviceRoleKey) {
-    return json({ error: 'Server misconfigured' }, 500, headers)
+    return json({ error: 'misconfigured' }, 500, headers)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -98,30 +194,51 @@ Deno.serve(async (req) => {
   try {
     body = await req.json()
   } catch {
-    return json({ error: 'Invalid JSON' }, 400, headers)
+    return json({ error: 'invalid_json' }, 400, headers)
   }
 
   const action = (body.action as string) ?? 'create'
 
+  if (action === 'check_slug') {
+    const started = Date.now()
+    const slug = normalizeSlug(body.slug)
+    const formatErr = slugError(slug)
+    let taken = false
+    if (!formatErr) {
+      const { data } = await supabase
+        .from('trips')
+        .select('id, payment_status')
+        .eq('slug', slug)
+        .maybeSingle()
+      // pending = abandoned Checkout; create will reclaim the slug.
+      taken = Boolean(data && data.payment_status !== 'pending')
+    }
+    // Uniform minimum latency — raises cost of slug enumeration.
+    const wait = 280 - (Date.now() - started)
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+    if (formatErr) return json({ taken: true, error: formatErr }, 200, headers)
+    return json({ taken }, 200, headers)
+  }
+
   if (action === 'result') {
-    if (!stripeKey) return json({ error: 'Server misconfigured' }, 500, headers)
+    if (!stripeKey) return json({ error: 'misconfigured' }, 500, headers)
     const stripe = new Stripe(stripeKey, {
       apiVersion: '2024-06-20',
       httpClient: Stripe.createFetchHttpClient(),
     })
     const sessionId = body.session_id as string | undefined
-    if (!sessionId) return json({ error: 'session_id is required' }, 400, headers)
+    if (!sessionId) return json({ error: 'session_required' }, 400, headers)
 
     let session: Stripe.Checkout.Session
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId)
     } catch (e) {
       console.error('session retrieve error', e)
-      return json({ error: 'Session not found' }, 404, headers)
+      return json({ error: 'session_not_found' }, 404, headers)
     }
 
     const tripId = session.metadata?.trip_id
-    if (!tripId) return json({ error: 'Session not linked to a trip' }, 404, headers)
+    if (!tripId) return json({ error: 'session_unlinked' }, 404, headers)
 
     if (session.payment_status === 'paid') {
       const planId = parsePlanId(session.metadata?.plan_id)
@@ -138,16 +255,17 @@ Deno.serve(async (req) => {
 
     const { data: trip, error } = await supabase
       .from('trips')
-      .select('slug, name, organizer_token, payment_status')
+      .select('slug, name, share_token, organizer_token, payment_status')
       .eq('id', tripId)
       .maybeSingle()
 
-    if (error || !trip) return json({ error: 'Trip not found' }, 404, headers)
+    if (error || !trip) return json({ error: 'trip_not_found' }, 404, headers)
 
     return json(
       {
         slug: trip.slug,
         name: trip.name,
+        share_token: trip.share_token,
         organizer_token: trip.organizer_token,
         payment_status: trip.payment_status,
       },
@@ -160,75 +278,38 @@ Deno.serve(async (req) => {
   if (action === 'delete_free') {
     const slug = normalizeSlug(body.slug)
     const token = String(body.token ?? '')
-    if (!slug || !token) return json({ error: 'slug and token are required' }, 400, headers)
-    const { data: trip, error } = await supabase
-      .from('trips')
-      .select('id, plan_id, organizer_token')
-      .eq('slug', slug)
-      .maybeSingle()
-    if (error || !trip) return json({ error: 'Trip not found' }, 404, headers)
-    if (trip.organizer_token !== token) return json({ error: 'Invalid token' }, 403, headers)
-    if (trip.plan_id !== 'free') return json({ error: 'Not a free trip' }, 400, headers)
-
-    // photos.trip_id / members.trip_id の FK は NO ACTION —
-    // Storage → photos → members → trips の順に掃除しないと削除が失敗する
-    const bucket = 'trip-photos'
-    const { data: entries, error: listError } = await supabase.storage
-      .from(bucket)
-      .list(trip.id, { limit: 1000 })
-    if (listError) {
-      console.error('delete_free storage list error', trip.id, listError)
-    }
-    const paths = (entries ?? [])
-      .filter((e) => e.name && !e.name.endsWith('/'))
-      .map((e) => `${trip.id}/${e.name}`)
-    if (paths.length) {
-      const { error: removeError } = await supabase.storage.from(bucket).remove(paths)
-      if (removeError) console.error('delete_free storage remove error', trip.id, removeError)
-    }
-
-    const { error: photosError } = await supabase.from('photos').delete().eq('trip_id', trip.id)
-    if (photosError) {
-      console.error('delete_free photos error', trip.id, photosError)
-      return json({ error: 'Failed to delete trip data' }, 500, headers)
-    }
-    const { error: membersError } = await supabase.from('members').delete().eq('trip_id', trip.id)
-    if (membersError) {
-      console.error('delete_free members error', trip.id, membersError)
-      return json({ error: 'Failed to delete trip data' }, 500, headers)
-    }
-    const { error: deleteError } = await supabase.from('trips').delete().eq('id', trip.id)
-    if (deleteError) {
-      console.error('delete_free trip error', trip.id, deleteError)
-      return json({ error: 'Failed to delete trip' }, 500, headers)
-    }
+    const purged = await purgeFreeTrip(supabase, slug, token)
+    if (!purged.ok) return json({ error: purged.error }, purged.status, headers)
     return json({ ok: true }, 200, headers)
   }
 
-  const slug = normalizeSlug(body.slug ?? body.title)
-  const slugErr = slugError(slug)
-  if (slugErr) return json({ error: slugErr, field: 'slug' }, 400, headers)
-
-  const { data: existing, error: existErr } = await supabase
-    .from('trips')
-    .select('id')
-    .eq('slug', slug)
-    .maybeSingle()
-  if (existErr) {
-    console.error('slug check error', existErr)
-    return json({ error: 'Failed to validate name' }, 500, headers)
-  }
-  if (existing) return json({ error: 'この名前はすでに使われています', field: 'slug' }, 409, headers)
-
   const planId = parsePlanId(body.plan_id)
+  const freeToken = String(body.free_token ?? '')
+  const freeSlug = normalizeSlug(body.free_slug ?? body.slug)
+
+  // 有料化時: FREE を token 付きで回収してから進む
+  if (planId !== 'free' && freeToken && freeSlug) {
+    const purged = await purgeFreeTrip(supabase, freeSlug, freeToken)
+    if (!purged.ok && purged.status !== 400) {
+      return json({ error: purged.error }, purged.status, headers)
+    }
+  }
+
+  const name = normalizeDisplayName(body.name ?? body.title)
+  if (!name) return json({ error: 'name_required', field: 'name' }, 400, headers)
+
+  const slug = await allocateSlug(supabase)
+  if (!slug) return json({ error: 'allocate_failed' }, 500, headers)
+
   const currency = parseCurrency(body.currency)
   const plan = PLANS[planId]
-  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : slug
+  const maxPhotosRaw = Number(body.max_photos)
+  const maxPhotos = Number.isFinite(maxPhotosRaw)
+    ? Math.min(plan.maxPhotos, Math.max(1, Math.floor(maxPhotosRaw)))
+    : plan.maxPhotos
   const commentRequired = body.comment_required !== false
   const showNicknames = body.show_nicknames === true
-  const dateFormat = DATE_FORMATS.has(String(body.date_format))
-    ? String(body.date_format)
-    : 'YY.M.D'
+  const dateFormat = 'none'
 
   if (planId === 'free') {
     const ttlHours = plan.freeTtlHours ?? 2
@@ -238,7 +319,7 @@ Deno.serve(async (req) => {
       .insert({
         slug,
         name,
-        max_photos: plan.maxPhotos,
+        max_photos: maxPhotos,
         plan_id: planId,
         reveal_at: null,
         comment_required: commentRequired,
@@ -247,24 +328,25 @@ Deno.serve(async (req) => {
         payment_status: 'paid',
         expires_at: expiresAt,
       })
-      .select('id, slug, organizer_token')
+      .select('id, slug, share_token, organizer_token')
       .single()
 
     if (insertError) {
       if ((insertError as { code?: string }).code === '23505') {
-        return json({ error: 'この名前はすでに使われています', field: 'slug' }, 409, headers)
+        return json({ error: 'slug_taken', field: 'slug' }, 409, headers)
       }
       console.error('trip insert error', insertError)
-      return json({ error: 'Failed to create trip' }, 500, headers)
+      return json({ error: 'create_failed' }, 500, headers)
     }
 
     const origin = (body.origin as string) || req.headers.get('Origin') || Deno.env.get('APP_ORIGIN') || ''
-    const successUrl = `${origin.replace(/\/$/, '')}/create/success?free=1&slug=${encodeURIComponent(trip.slug)}&token=${encodeURIComponent(trip.organizer_token)}`
+    const successUrl = `${origin.replace(/\/$/, '')}/create/success?free=1&share=${encodeURIComponent(trip.share_token)}&slug=${encodeURIComponent(trip.slug)}&token=${encodeURIComponent(trip.organizer_token)}`
     return json(
       {
         url: successUrl,
         trip_id: trip.id,
         slug: trip.slug,
+        share_token: trip.share_token,
         organizer_token: trip.organizer_token,
         plan_id: planId,
         free: true,
@@ -274,7 +356,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  if (!stripeKey) return json({ error: 'Server misconfigured' }, 500, headers)
+  if (!stripeKey) return json({ error: 'misconfigured' }, 500, headers)
   const stripe = new Stripe(stripeKey, {
     apiVersion: '2024-06-20',
     httpClient: Stripe.createFetchHttpClient(),
@@ -283,7 +365,7 @@ Deno.serve(async (req) => {
   const insertPayload = {
     slug,
     name,
-    max_photos: plan.maxPhotos,
+    max_photos: maxPhotos,
     plan_id: planId,
     reveal_at: null,
     comment_required: commentRequired,
@@ -295,25 +377,28 @@ Deno.serve(async (req) => {
   const { data: trip, error: insertError } = await supabase
     .from('trips')
     .insert(insertPayload)
-    .select('id, slug')
+    .select('id, slug, share_token')
     .single()
 
   if (insertError) {
     if ((insertError as { code?: string }).code === '23505') {
-      return json({ error: 'この名前はすでに使われています', field: 'slug' }, 409, headers)
+      return json({ error: 'slug_taken', field: 'slug' }, 409, headers)
     }
     console.error('trip insert error', insertError)
-    return json({ error: 'Failed to create trip' }, 500, headers)
+    return json({ error: 'create_failed' }, 500, headers)
   }
 
   const origin = req.headers.get('Origin') ?? Deno.env.get('APP_ORIGIN') ?? ''
   const successBase = (body.origin as string) || origin
   const successUrl = `${successBase}/create/success?session_id={CHECKOUT_SESSION_ID}`
   const cancelUrl = `${successBase}/create`
+  const localeRaw = String(body.locale ?? '').toLowerCase()
+  const checkoutLocale = localeRaw === 'en' || currency === 'usd' ? 'en' : 'ja'
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      locale: checkoutLocale,
       line_items: [
         {
           quantity: 1,
@@ -327,6 +412,7 @@ Deno.serve(async (req) => {
       metadata: {
         trip_id: trip.id,
         slug: trip.slug,
+        share_token: trip.share_token,
         type: planId,
         plan_id: planId,
       },
@@ -334,9 +420,13 @@ Deno.serve(async (req) => {
       cancel_url: cancelUrl,
     })
 
-    return json({ url: session.url, trip_id: trip.id, slug: trip.slug, plan_id: planId }, 200, headers)
+    return json(
+      { url: session.url, trip_id: trip.id, slug: trip.slug, share_token: trip.share_token, plan_id: planId },
+      200,
+      headers,
+    )
   } catch (e) {
     console.error('checkout session error', e)
-    return json({ error: 'Failed to start checkout' }, 500, headers)
+    return json({ error: 'checkout_failed' }, 500, headers)
   }
 })

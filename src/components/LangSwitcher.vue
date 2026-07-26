@@ -30,11 +30,11 @@ function cycle() {
 </script>
 
 <style scoped>
+/*
+ * BP: 言語切替はヘッダー右上・フッター・設定内に置くのが定石で、
+ * 全ページ常設のフローティングにはしない（呼び出し側のレイアウトに従う）。
+ */
 .lang-fab {
-  position: fixed;
-  top: calc(10px + var(--safe-top, 0px));
-  right: max(10px, env(safe-area-inset-right));
-  z-index: 1500;
   min-width: 40px;
   min-height: 30px;
   padding: 0 10px;
@@ -42,12 +42,11 @@ function cycle() {
   border-radius: 999px;
   background: rgba(248, 247, 244, 0.82);
   color: var(--text-muted);
+  font-family: inherit;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  backdrop-filter: blur(8px);
   cursor: pointer;
-  opacity: 0.85;
 }
 
 .lang-fab:active {

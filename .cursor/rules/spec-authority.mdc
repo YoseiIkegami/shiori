@@ -1,0 +1,12 @@
+---
+description: 仕様の正本は SPEC.md。docs とコードの更新順を守る
+alwaysApply: true
+---
+
+# 仕様正本（SPEC → docs → コード）
+
+- 設計判断・仕様の正本: [`SPEC.md`](../../SPEC.md)
+- 実装に沿った整理: [`docs/`](../../docs/README.md)
+- 実装と docs が食い違う場合は、**先に `SPEC.md` を更新**し、次に `docs/`、最後にコードを合わせる
+- エージェントはユーザー依頼なく仕様（料金・ライフサイクル・RLS・画面契約など）を変えない
+- 作業単位と進捗の記録: [`docs/issues.md`](../../docs/issues.md)

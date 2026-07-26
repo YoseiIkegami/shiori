@@ -6,7 +6,10 @@
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy",
+    "shareTitle": "SHIORI -instant camera-",
+    "shareBody": "A disposable camera for keeping memories",
     "language": "Language",
+    "menu": "Menu",
     "legal": {
       "terms": "Terms",
       "privacy": "Privacy",
@@ -16,7 +19,7 @@
   "home": {
     "brand": "SHIORI",
     "brandSub": "Instant Camera",
-    "headline": "Rest while you travel.\nOpen together when it ends.",
+    "headline": "Bookmark your journey.",
     "cta": "Start a trip",
     "howto": {
       "label": "How it works",
@@ -24,18 +27,15 @@
       "slideN": "Slide {n}",
       "shoot": {
         "title": "Shoot",
-        "body": "Take photos during the trip.",
-        "caption": "This moment"
+        "body": "Record the trip."
       },
       "seal": {
-        "title": "Seal",
-        "body": "Nobody sees them until the count is full.",
-        "caption": "Kept sealed"
+        "title": "Tuck away",
+        "body": "Enjoy the journey."
       },
       "open": {
         "title": "Open",
-        "body": "When ready, everyone opens together.",
-        "caption": "The reveal"
+        "body": "Revisit the memories."
       }
     }
   },
@@ -44,28 +44,113 @@
     "stepSetup": "Name & settings",
     "stepPlan": "Choose a plan",
     "nameLabel": "Trip name",
-    "namePlaceholder": "e.g. natsu-ibuki",
-    "nameHint": "3–30 characters, letters, numbers, hyphens",
+    "namePlaceholder": "e.g. Summer seaside",
+    "nameHint": "Up to 60 characters",
     "suggest": "Suggest",
     "next": "Next",
-    "checking": "Checking name…",
-    "nameOk": "This name is available",
-    "checkFailed": "Could not check the name",
     "planLabel": "Plan",
+    "filmCountLabel": "Film count",
+    "filmCountValue": "{n} shots",
     "commentRequired": "Require a caption",
     "showNicknames": "Show photographer names",
-    "showDate": "Show dates",
     "preparing": "Preparing…",
     "submitFree": "Start for free",
-    "submitPaid": "Start for {price}",
-    "freeNote": "Deleted soon after you leave",
+    "submitPaid": "Pay {price}",
     "createFailed": "Could not create the trip",
+    "nameRequired": "Enter a trip name",
     "noCheckoutUrl": "Could not get the checkout URL"
+  },
+  "nameSuggest": {
+    "adjectives": [
+      "Quiet",
+      "Lively",
+      "Soft",
+      "Golden",
+      "Tiny",
+      "Bright",
+      "Slow",
+      "Wild",
+      "Cozy",
+      "Clear",
+      "Warm",
+      "Gentle",
+      "Distant",
+      "Sparkling"
+    ],
+    "prefixes": [
+      "Summer",
+      "Sea",
+      "Wind",
+      "Star",
+      "Night",
+      "Dawn",
+      "Road",
+      "Sky",
+      "Blue",
+      "Forest",
+      "Moon",
+      "Coast",
+      "Hill",
+      "River",
+      "Paper",
+      "Film"
+    ],
+    "suffixes": [
+      "trip",
+      "memory",
+      "album",
+      "days",
+      "weekend",
+      "escape",
+      "notes",
+      "film",
+      "journey",
+      "keepsake",
+      "postcard",
+      "light",
+      "stories",
+      "frames",
+      "hours"
+    ]
   },
   "slug": {
     "format": "3–30 characters, letters, numbers, hyphens",
     "reserved": "This name cannot be used",
-    "taken": "This name is already taken"
+    "taken": "This name is already taken",
+    "prefixes": [
+      "sea",
+      "wind",
+      "sun",
+      "moon",
+      "road",
+      "sky",
+      "dune",
+      "pine",
+      "dawn",
+      "dusk",
+      "tide",
+      "hill",
+      "cove",
+      "star",
+      "lake"
+    ],
+    "suffixes": [
+      "trip",
+      "path",
+      "memory",
+      "journey",
+      "trail",
+      "light",
+      "song",
+      "wing",
+      "dream",
+      "shore",
+      "vista",
+      "note",
+      "map",
+      "day",
+      "lane"
+    ]
   },
   "plan": {
     "free": {
@@ -91,8 +176,9 @@
     "sendFailed": "Could not send. Please try again.",
     "commentNeeded": "Please add a caption",
     "freeEnd": {
-      "note": "That's the free trial. These photos will disappear soon.",
-      "cta": "Start a trip"
+      "note": "That's the end of the trial.\nTake a new camera and head out.",
+      "cta": "Upgrade your plan",
+      "deleteFailed": "Could not remove the trial trip"
     }
   },
   "camera": {
@@ -155,6 +241,7 @@
     "saveAll": "Save all",
     "openShare": "Open share",
     "select": "Select",
+    "selectPhoto": "Select this photo",
     "cancelSelect": "Cancel",
     "saveSelected": "Save {n}",
     "saveSelectedConfirm": "Save the {n} selected photos?",
@@ -168,26 +255,22 @@
     "imageFailed": "Could not load the image",
     "saveFailed": "Could not save",
     "downloadStarted": "Download started",
-    "needsRetap": "Ready. Tap once more"
+    "needsRetap": "Ready. Tap once more",
+    "trialSaveLocked": "Saving is not available on the trial"
   },
   "manage": {
     "share": "Share",
     "revealed": "Revealed",
     "photosStat": "{count} / {max} shots",
-    "shareLink": "Share link",
-    "copyLink": "Copy link",
-    "showQr": "Show QR code",
-    "settings": "Trip settings",
+    "settings": "Settings",
+    "editName": "Edit display name",
     "displayName": "Display name",
     "filmCount": "Film count",
     "filmFixed": "{n} shots",
-    "dateLabel": "Date display",
-    "dateNone": "None",
     "save": "Save",
     "saving": "Saving…",
     "saved": "Saved",
     "saveFailed": "Could not save",
-    "endSection": "End",
     "endBtn": "End the trip and open the photos",
     "ending": "Working…",
     "endConfirmTitle": "End the trip?",
@@ -196,25 +279,21 @@
     "endFailed": "Could not end the trip",
     "tokenRequired": "A token is required",
     "loadFailed": "Could not load",
-    "opFailed": "Operation failed",
-    "shareText": "Let's keep our trip photos together"
+    "opFailed": "Operation failed"
   },
   "success": {
-    "titlePaid": "Your trip link is ready",
+    "titlePaid": "Your camera is ready",
     "titlePending": "Confirming payment",
     "pendingLead": "Please reload in a moment",
-    "how1": "Send the link to everyone",
-    "how1Note": "Photos gather inside this link. Share it as is",
-    "how2": "Shoot during the trip",
-    "how3": "When it ends, open together",
-    "otherShare": "Other ways to share",
-    "sendLink": "Send the link",
+    "how1": "Send the link",
+    "how1Note": "This becomes everyone's camera",
+    "how2": "Shoot freely during the trip",
+    "how2Note": "No one can see inside until the film is used up",
+    "how3": "Look back on the memories at the end",
+    "showQr": "Show QR code",
+    "hideQr": "Show illustration",
     "copyLink": "Copy link",
-    "settings": "Organizer menu",
-    "emailHint": "The settings link will also be emailed",
-    "bookmark": "Bookmark the organizer link too",
-    "copyManage": "Copy settings link",
-    "openManage": "Open settings page",
+    "openSettings": "Settings",
     "startShooting": "Start shooting",
     "noSession": "Session not found",
     "resultFailed": "Could not get the result"

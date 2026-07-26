@@ -5,17 +5,20 @@
 - **Stripe Checkout**（ホスト画面）で一括支払い
 - プランは松竹梅（FREE / Standard / Premium。`plan_id` は `plus` のまま）
 - 通貨はアプリ locale（ja → JPY、それ以外 → USD）
+- Checkout 画面言語は Session の `locale`（`ja` / `en`）でアプリに合わせる
 - 未払い trip は撮影・閲覧不可
+- 決済完了後、Webhook から Resend で幹事へ共有URL・幹事URLを送信（`RESEND_API_KEY`）
+- **領収書メール**は Stripe Dashboard の「顧客へのメール / Receipts」を有効化（自前送信しない）
 
 ## プラン
 
-| plan_id | 枚数 | 保存 | JPY | USD | 決済 |
+| plan_id | 枚数上限（作成時に 1〜上限を選択） | 保存 | JPY | USD | 決済 |
 |---|---|---|---|---|---|
-| `free` | 3 | 約2時間（セッション） | 無料 | Free | なし・即 paid |
-| `standard` | 50 | 7日 | ¥150 | $1 | Checkout |
-| `plus` | 500 | 無期限（`expires_at` NULL） | ¥750 | $5 | Checkout |
+| `free` | 〜3 | 約2時間（セッション） | 無料 | Free | なし・即 paid |
+| `standard` | 〜50 | 7日 | ¥150 | $1 | Checkout |
+| `plus` | 〜500 | 無期限（`expires_at` NULL） | ¥750 | $5 | Checkout |
 
-金額は Edge Function のマスタが決定（クライアントの amount は信用しない）。
+金額は Edge Function のマスタが決定。`max_photos` はクライアント指定可だが **プラン上限でクランプ**（信用しない）。
 
 ## 環境変数
 
@@ -100,6 +103,6 @@ Edge Functions の再デプロイは不要（secrets は自動反映）。
 
 1. `/create` で slug → Standard / Premium を選び Checkout
 2. テストカード `4242…4242`
-3. FREE は決済なしで success → `/t/{slug}`（閉じると削除試行、TTL でも回収）
+3. FREE は決済なしで success → `/t/{share_token}`。ボードの「プランをアップグレードする」で `delete_free`（token 必須）して `/create?upgrade=1&slug=&token=`。作成画面でも再削除し、有料 checkout 時は `free_token` で同名 FREE を回収してから発行。放置時は TTL 2h + `purge-expired-trips` で回収。保存・QR・設定は FREE では出さない／ロック
 
 詳細: [`i18n.md`](./i18n.md), [`trip-settings.md`](./trip-settings.md)

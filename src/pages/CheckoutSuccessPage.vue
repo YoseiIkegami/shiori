@@ -1,5 +1,7 @@
 <template>
   <main class="success flow-page flow-shell" :class="{ 'has-flow-bottom': paid }">
+    <HamburgerMenu />
+
     <MoyoLoading v-if="loading" :size="64" />
 
     <van-empty v-else-if="error" image="error" :description="error" />
@@ -13,57 +15,108 @@
       <p v-if="!paid" class="lead">{{ t('success.pendingLead') }}</p>
 
       <template v-if="paid">
-        <p class="trip-name display-type">{{ result.slug }}</p>
+        <div
+          v-if="!isFree"
+          class="title-row"
+        >
+          <button
+            type="button"
+            class="trip-link"
+            :aria-label="t('success.copyLink')"
+            @click="copyShare"
+          >
+            <svg class="link-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L11 5"
+              />
+              <path
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L13 19"
+              />
+            </svg>
+            <span class="trip-name display-type" :title="tripTitleFull">{{ tripTitleDisplay }}</span>
+          </button>
+        </div>
+        <p v-else class="trip-name-static display-type" :title="tripTitleFull">{{ tripTitleDisplay }}</p>
 
-        <ol class="how">
-          <li>
-            <span class="how-num" aria-hidden="true">1</span>
-            <div class="how-body">
-              <p class="how-title">{{ t('success.how1') }}</p>
-              <p class="how-note">{{ t('success.how1Note') }}</p>
-            </div>
-          </li>
-          <li>
-            <span class="how-num" aria-hidden="true">2</span>
-            <div class="how-body">
-              <p class="how-title">{{ t('success.how2') }}</p>
-            </div>
-          </li>
-          <li>
-            <span class="how-num" aria-hidden="true">3</span>
-            <div class="how-body">
-              <p class="how-title">{{ t('success.how3') }}</p>
-            </div>
-          </li>
-        </ol>
-
-        <details class="fold">
-          <summary>{{ t('success.otherShare') }}</summary>
-          <div class="fold-body">
-            <button type="button" class="secondary" @click="copy(shareUrl)">
-              {{ t('success.copyLink') }}
-            </button>
-            <QrCode :url="shareUrl" :size="168" />
+        <button
+          v-if="!isFree"
+          ref="mediaStage"
+          type="button"
+          class="media-stage"
+          :aria-label="showQr ? t('success.hideQr') : t('success.showQr')"
+          @click="toggleMedia"
+        >
+          <img
+            v-show="!showQr"
+            class="depart-illust"
+            src="/illustrations/depart.webp"
+            alt=""
+            width="440"
+            height="550"
+            decoding="async"
+          />
+          <div v-show="showQr" class="qr-panel">
+            <QrCode :url="shareUrl" :size="320" />
           </div>
-        </details>
+        </button>
+        <div v-else class="media-stage is-static">
+          <img
+            class="depart-illust"
+            src="/illustrations/depart.webp"
+            alt=""
+            width="440"
+            height="550"
+            decoding="async"
+          />
+        </div>
 
-        <details class="fold">
-          <summary>{{ t('success.settings') }}</summary>
-          <div class="fold-body">
-            <p class="fold-note">{{ t('success.emailHint') }}</p>
-            <p class="fold-note">{{ t('success.bookmark') }}</p>
-            <button type="button" class="secondary" @click="copy(manageUrl)">
-              {{ t('success.copyManage') }}
-            </button>
-            <a class="organizer-link" :href="manageUrl">{{ t('success.openManage') }}</a>
-          </div>
-        </details>
+        <template v-if="!isFree">
+          <ol class="how">
+            <li>
+              <span class="how-num" aria-hidden="true">1</span>
+              <div class="how-body">
+                <p class="how-title">{{ t('success.how1') }}</p>
+                <p class="how-note">{{ t('success.how1Note') }}</p>
+              </div>
+              <button type="button" class="how-copy" @click="copyShare">
+                {{ t('common.copy') }}
+              </button>
+            </li>
+            <li>
+              <span class="how-num" aria-hidden="true">2</span>
+              <div class="how-body">
+                <p class="how-title">{{ t('success.how2') }}</p>
+                <p class="how-note">{{ t('success.how2Note') }}</p>
+              </div>
+            </li>
+            <li>
+              <span class="how-num" aria-hidden="true">3</span>
+              <div class="how-body">
+                <p class="how-title">{{ t('success.how3') }}</p>
+              </div>
+            </li>
+          </ol>
+        </template>
 
         <div class="flow-bottom">
-          <button type="button" class="flow-btn primary" @click="shareTrip">
-            {{ t('success.sendLink') }}
-          </button>
-          <router-link class="shoot-link" :to="`/t/${result.slug}`">
+          <router-link
+            v-if="!isFree"
+            class="settings-link"
+            :to="manageTo"
+          >
+            {{ t('success.openSettings') }}
+          </router-link>
+          <router-link class="flow-btn primary" :to="`/t/${publicKey}`">
             {{ t('success.startShooting') }}
           </router-link>
         </div>
@@ -73,80 +126,142 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import gsap from 'gsap'
 import { showToast } from 'vant'
+import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import QrCode from '@/components/QrCode.vue'
-import { fetchCheckoutResult } from '@/lib/tripApi'
+import { fetchCheckoutResult, storeFreeOrganizerToken } from '@/lib/tripApi'
+import { buildTripShareMessage } from '@/lib/shareMessage'
 
 const { t } = useI18n()
 
 const route = useRoute()
 const loading = ref(true)
 const error = ref<string | null>(null)
+const showQr = ref(false)
+const mediaStage = ref<HTMLElement | null>(null)
+const animating = ref(false)
 const result = ref<{
   slug: string
   name: string
+  share_token: string
   organizer_token: string
   payment_status: string
+  plan_id?: string
 } | null>(null)
 
 const paid = computed(() => result.value?.payment_status === 'paid')
+const isFree = computed(() => result.value?.plan_id === 'free')
+
+/** Visible title on success — prefer display name over internal slug. */
+const TITLE_DISPLAY_MAX = 20
+
+function ellipsizeTitle(raw: string, max = TITLE_DISPLAY_MAX): string {
+  const chars = [...raw.trim()]
+  if (chars.length <= max) return chars.join('')
+  return `${chars.slice(0, max).join('')}…`
+}
+
+const tripTitleFull = computed(() => {
+  const row = result.value
+  if (!row) return ''
+  return (row.name || row.slug || '').trim()
+})
+
+const tripTitleDisplay = computed(() => ellipsizeTitle(tripTitleFull.value))
+
+const publicKey = computed(() =>
+  result.value ? result.value.share_token || result.value.slug : '',
+)
 
 const shareUrl = computed(() =>
-  result.value ? `${window.location.origin}/t/${result.value.slug}` : '',
+  publicKey.value ? `${window.location.origin}/t/${publicKey.value}` : '',
 )
 
-const manageUrl = computed(() =>
-  result.value
-    ? `${window.location.origin}/manage/${result.value.slug}?token=${result.value.organizer_token}`
-    : '',
+const shareMessage = computed(() =>
+  buildTripShareMessage(t('common.shareTitle'), t('common.shareBody'), shareUrl.value),
 )
 
-async function copy(text: string) {
+const manageTo = computed(() => {
+  if (!result.value || !publicKey.value) return { name: 'home' as const }
+  const query: Record<string, string> = {
+    token: result.value.organizer_token,
+    from: 'success',
+  }
+  const sessionId = String(route.query.session_id ?? '')
+  if (sessionId) query.session_id = sessionId
+  if (isFree.value) {
+    query.free = '1'
+    query.slug = result.value.slug
+  }
+  return {
+    name: 'manage' as const,
+    params: { slug: publicKey.value },
+    query,
+  }
+})
+
+async function copyShare() {
+  if (!shareUrl.value) return
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(shareMessage.value)
     showToast(t('common.copied'))
   } catch {
     showToast(t('common.copyFailed'))
   }
 }
 
-async function shareTrip() {
-  if (!shareUrl.value) return
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: 'SHIORI',
-        text: t('manage.shareText'),
-        url: shareUrl.value,
-      })
-      return
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') return
-    }
+async function toggleMedia() {
+  if (animating.value || !mediaStage.value) {
+    showQr.value = !showQr.value
+    return
   }
-  await copy(shareUrl.value)
+  animating.value = true
+  const stage = mediaStage.value
+  const reduce =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  if (reduce) {
+    showQr.value = !showQr.value
+    animating.value = false
+    return
+  }
+
+  await gsap.to(stage, { opacity: 0, scale: 0.94, duration: 0.18, ease: 'power2.in' })
+  showQr.value = !showQr.value
+  await nextTick()
+  await gsap.fromTo(
+    stage,
+    { opacity: 0, scale: 0.94 },
+    { opacity: 1, scale: 1, duration: 0.22, ease: 'power2.out' },
+  )
+  animating.value = false
 }
 
 onMounted(async () => {
   const free = String(route.query.free ?? '') === '1'
+  const freeShare = String(route.query.share ?? '')
   const freeSlug = String(route.query.slug ?? '')
   const freeToken = String(route.query.token ?? '')
 
   if (free && freeSlug && freeToken) {
     try {
-      sessionStorage.setItem(`shiori.free.${freeSlug}`, freeToken)
+      storeFreeOrganizerToken(freeSlug, freeToken)
     } catch {
       /* ignore */
     }
     result.value = {
       slug: freeSlug,
-      name: freeSlug,
+      name: String(route.query.name ?? '').trim() || freeSlug,
+      share_token: freeShare || freeSlug,
       organizer_token: freeToken,
       payment_status: 'paid',
+      plan_id: 'free',
     }
     loading.value = false
     return
@@ -159,7 +274,11 @@ onMounted(async () => {
     return
   }
   try {
-    result.value = await fetchCheckoutResult(sessionId)
+    const data = await fetchCheckoutResult(sessionId)
+    result.value = {
+      ...data,
+      share_token: data.share_token || data.slug,
+    }
   } catch (e) {
     console.error(e)
     error.value = e instanceof Error ? e.message : t('success.resultFailed')
@@ -173,37 +292,49 @@ onMounted(async () => {
 .success {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 26px;
+  gap: 12px;
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding-top: calc(10px + var(--safe-top));
+}
+
+.success.has-flow-bottom {
+  /* 固定フッター2段分を確保 */
+  padding-bottom: calc(132px + var(--safe-bottom));
 }
 
 .success-heading {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   text-align: center;
 }
 
 .done-mark {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--accent-soft, #f5e3d6);
   color: var(--accent);
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   font-weight: 700;
 }
 
 h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--ink-brown);
+  line-height: 1.35;
 }
 
 .lead {
@@ -213,128 +344,212 @@ h1 {
   font-size: 0.85rem;
 }
 
-.trip-name {
+.title-row {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  min-width: 0;
+}
+
+.trip-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: min(100%, 20em);
   margin: 0;
+  border: 0;
+  padding: 4px;
+  background: transparent;
+  color: var(--ink-brown);
+  cursor: pointer;
+}
+
+.link-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+.trip-name {
+  max-width: min(100%, 18em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: inherit;
   text-align: center;
-  font-size: 1.5rem;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  text-decoration-color: color-mix(in srgb, var(--ink-brown) 35%, transparent);
+}
+
+.trip-name-static {
+  flex: 0 0 auto;
+  margin: 0;
+  max-width: min(100%, 18em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
   font-weight: 500;
   color: var(--ink-brown);
-  word-break: break-all;
+  text-align: center;
+}
+
+/* 上下を固定し、残りの高さいっぱいに挿絵を広げる */
+.media-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transform-origin: center center;
+  font: inherit;
+  color: inherit;
+}
+
+.media-stage.is-static {
+  cursor: default;
+}
+
+.depart-illust,
+.qr-panel {
+  width: min(100cqw, calc(100cqh * 4 / 5));
+  height: min(100cqh, calc(100cqw * 5 / 4));
+  border-radius: 12px;
+}
+
+.depart-illust {
+  display: block;
+  object-fit: cover;
+}
+
+.qr-panel {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 0;
+  pointer-events: none;
+}
+
+.qr-panel :deep(.qr-code) {
+  width: 80% !important;
+  height: auto !important;
+  max-height: 80%;
+  aspect-ratio: 1;
+}
+
+.qr-panel :deep(canvas) {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 .how {
   list-style: none;
-  margin: 8px 0 0;
-  padding: 18px 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 14px;
   border-radius: 12px;
   background: var(--paper-cream, #fbf7ef);
   border: 1px solid #eee5d7;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .how li {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .how-num {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
 .how-body {
+  flex: 1;
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 1px;
 }
 
 .how-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.how-copy {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  min-height: 30px;
+  margin-top: -2px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-brown);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .how-note {
-  margin: 4px 0 0;
-  font-size: 0.78rem;
+  margin: 3px 0 0;
+  font-size: 0.74rem;
   color: var(--text-muted);
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
-.fold {
-  border-top: 1px solid var(--line);
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.fold summary {
-  cursor: pointer;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.fold-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 4px 0 18px;
-}
-
-.fold-note {
-  margin: 0;
-  font-size: 0.78rem;
-}
-
-.fold-body :deep(.qr-code) {
-  margin: 6px auto 0;
-}
-
-.secondary {
-  min-height: 44px;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.organizer-link {
-  color: var(--accent);
-  font-weight: 700;
-  text-decoration: none;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.shoot-link {
+.flow-bottom > .flow-btn,
+.flow-bottom > .settings-link {
   display: grid;
   place-items: center;
-  min-height: 48px;
+  text-decoration: none;
+}
+
+.settings-link {
+  min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-stage {
+    transition: none;
+  }
 }
 </style>

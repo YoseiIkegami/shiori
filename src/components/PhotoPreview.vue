@@ -1,22 +1,31 @@
 <template>
   <div class="preview">
-    <div class="polaroid">
+    <div
+      class="polaroid"
+      @pointerdown="onPreviewPointerDown"
+      @pointermove="onPreviewPointerMove"
+      @pointerup="onPreviewPointerUp"
+      @pointercancel="onPreviewPointerCancel"
+    >
       <div class="photo-wrap">
-        <img :src="displayUrl" alt="" />
-        <time class="photo-date">{{ stampText }}</time>
+        <img :src="displayUrl" alt="" draggable="false" />
+        <p v-if="filterFlashName" class="filter-flash" aria-live="polite">
+          {{ filterFlashName }}
+        </p>
       </div>
       <button
         type="button"
         class="caption"
         :class="{ handwriting: !!localComment.trim(), placeholder: !localComment.trim() }"
         @click="openSheet"
+        @pointerdown.stop
       >
         {{ localComment.trim() || t('preview.commentPlaceholder') }}
       </button>
     </div>
 
     <!-- Instagram風フィルター選択: 横スクロールのサムネイルストリップ -->
-    <div class="filter-strip" role="radiogroup" :aria-label="t('preview.filter')">
+    <div ref="filterStripEl" class="filter-strip" role="radiogroup" :aria-label="t('preview.filter')">
       <button
         v-for="f in FILTERS"
         :key="f.id"
@@ -74,12 +83,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatCaptureStamp } from '@/lib/composePolaroid'
 import { FILTERS, type FilterMode } from '@/lib/filterMode'
 import { buildFilterThumbnails, gradePhotoBlob } from '@/lib/polaroidTone'
-import type { DateFormat } from '@/types'
 
 const { t } = useI18n()
 
@@ -88,11 +95,9 @@ const props = withDefaults(
     imageUrl: string
     comment: string
     filterMode: FilterMode
-    capturedAt?: Date
     commentRequired?: boolean
-    dateFormat?: DateFormat
   }>(),
-  { commentRequired: true, dateFormat: 'YY.M.D' },
+  { commentRequired: true },
 )
 
 const emit = defineEmits<{
@@ -113,14 +118,26 @@ let gradeSeq = 0
 const canProceed = computed(
   () => !props.commentRequired || localComment.value.trim().length > 0,
 )
-const stampText = computed(() =>
-  formatCaptureStamp(props.capturedAt ?? new Date(), props.dateFormat),
-)
 
 /** Picker thumbnails (data URLs) — rebuilt when the source photo changes. */
 const thumbs = ref<Partial<Record<FilterMode, string>>>({})
 let thumbSeq = 0
 const filterItemEls = new Map<FilterMode, HTMLElement>()
+const filterStripEl = ref<HTMLElement | null>(null)
+
+/** Instagram: brief filter name on the photo when the mode changes. */
+const filterFlashName = ref('')
+let filterFlashTimer: ReturnType<typeof setTimeout> | null = null
+
+const FILTER_ORDER = FILTERS.map((f) => f.id)
+
+/** Preview swipe (Instagram: swipe photo left/right to step filters). */
+const SWIPE_MIN_DX = 48
+let swipePointerId: number | null = null
+let swipeStartX = 0
+let swipeStartY = 0
+let swipeArmed = false
+let swipeConsumed = false
 
 function setFilterItemRef(id: FilterMode, el: Element | ComponentPublicInstance | null) {
   if (el instanceof HTMLElement) filterItemEls.set(id, el)
@@ -141,9 +158,110 @@ async function refreshThumbnails() {
   }
 }
 
-function selectFilter(id: FilterMode) {
+function flashFilterName(id: FilterMode) {
+  filterFlashName.value = t(`filter.${id}`)
+  if (filterFlashTimer) clearTimeout(filterFlashTimer)
+  filterFlashTimer = setTimeout(() => {
+    filterFlashName.value = ''
+    filterFlashTimer = null
+  }, 900)
+}
+
+/** クリック確定・スワイプ確定の共通適用口。二重emit防止に同一値なら何もしない。 */
+function applyFilter(id: FilterMode, opts?: { flash?: boolean }) {
+  if (id === props.filterMode) return
   emit('update:filterMode', id)
+  if (opts?.flash !== false) flashFilterName(id)
+}
+
+function selectFilter(id: FilterMode) {
+  applyFilter(id)
   filterItemEls.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+}
+
+/** Swipe left → next (strip moves left); swipe right → previous. Clamp at ends (IG). */
+function stepFilter(delta: number) {
+  const idx = FILTER_ORDER.indexOf(props.filterMode)
+  if (idx < 0) return
+  const nextIdx = Math.max(0, Math.min(FILTER_ORDER.length - 1, idx + delta))
+  const next = FILTER_ORDER[nextIdx]
+  if (!next || next === props.filterMode) return
+  selectFilter(next)
+}
+
+function onPreviewPointerDown(e: PointerEvent) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest('.caption')) return
+  swipePointerId = e.pointerId
+  swipeStartX = e.clientX
+  swipeStartY = e.clientY
+  swipeArmed = true
+  swipeConsumed = false
+  ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+}
+
+function onPreviewPointerMove(e: PointerEvent) {
+  if (!swipeArmed || e.pointerId !== swipePointerId || swipeConsumed) return
+  const dx = e.clientX - swipeStartX
+  const dy = e.clientY - swipeStartY
+  if (Math.abs(dx) < SWIPE_MIN_DX) return
+  if (Math.abs(dx) < Math.abs(dy) * 1.2) {
+    // 縦優先 → フィルター切替しない
+    swipeArmed = false
+    return
+  }
+  swipeConsumed = true
+  swipeArmed = false
+  // 左スワイプ = 次のフィルター
+  stepFilter(dx < 0 ? 1 : -1)
+}
+
+function onPreviewPointerUp(e: PointerEvent) {
+  if (e.pointerId !== swipePointerId) return
+  swipePointerId = null
+  swipeArmed = false
+  swipeConsumed = false
+}
+
+function onPreviewPointerCancel(e: PointerEvent) {
+  if (e.pointerId !== swipePointerId) return
+  swipePointerId = null
+  swipeArmed = false
+  swipeConsumed = false
+}
+
+/** Instagram風: スワイプで中央に来たフィルターを、止まったタイミングで自動適用する。 */
+function findCenteredFilterId(): FilterMode | null {
+  const strip = filterStripEl.value
+  if (!strip) return null
+  const stripRect = strip.getBoundingClientRect()
+  const stripCenter = stripRect.left + stripRect.width / 2
+  let closest: FilterMode | null = null
+  let closestDist = Infinity
+  for (const [id, el] of filterItemEls) {
+    const r = el.getBoundingClientRect()
+    const dist = Math.abs(r.left + r.width / 2 - stripCenter)
+    if (dist < closestDist) {
+      closestDist = dist
+      closest = id
+    }
+  }
+  return closest
+}
+
+function onFilterStripSettled() {
+  const id = findCenteredFilterId()
+  if (id) applyFilter(id)
+}
+
+const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window
+let scrollSettleTimer: ReturnType<typeof setTimeout> | null = null
+
+function onFilterStripScroll() {
+  if (supportsScrollEnd) return // scrollend に任せる（対応ブラウザではポーリング不要）
+  if (scrollSettleTimer) clearTimeout(scrollSettleTimer)
+  scrollSettleTimer = setTimeout(onFilterStripSettled, 130)
 }
 
 function revokeGradedUrl() {
@@ -203,10 +321,22 @@ watch(
   { immediate: true },
 )
 
+onMounted(() => {
+  const el = filterStripEl.value
+  if (!el) return
+  el.addEventListener('scroll', onFilterStripScroll, { passive: true })
+  if (supportsScrollEnd) el.addEventListener('scrollend', onFilterStripSettled)
+})
+
 onBeforeUnmount(() => {
   gradeSeq += 1
   thumbSeq += 1
   revokeGradedUrl()
+  if (scrollSettleTimer) clearTimeout(scrollSettleTimer)
+  if (filterFlashTimer) clearTimeout(filterFlashTimer)
+  const el = filterStripEl.value
+  el?.removeEventListener('scroll', onFilterStripScroll)
+  if (supportsScrollEnd) el?.removeEventListener('scrollend', onFilterStripSettled)
 })
 
 function onInput() {
@@ -262,6 +392,9 @@ function onNext() {
   padding: 13px 13px 0;
   box-shadow: 9px 12px 24px rgba(135, 141, 144, 0.28), -7px -7px 18px rgba(255,255,255,.9);
   transform: rotate(0.4deg);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .photo-wrap {
@@ -269,6 +402,7 @@ function onNext() {
   aspect-ratio: 3 / 4;
   overflow: hidden;
   background: #ddd;
+  cursor: grab;
 }
 
 .photo-wrap img {
@@ -276,6 +410,37 @@ function onNext() {
   height: 100%;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.filter-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transform: translate(-50%, -50%);
+  background: rgba(20, 16, 12, 0.45);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  animation: filter-flash-in 0.2s ease;
+}
+
+@keyframes filter-flash-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -46%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }
 
 .caption {
@@ -291,24 +456,9 @@ function onNext() {
   color: var(--ink-brown);
   word-break: break-all;
   cursor: pointer;
-}
-
-.photo-date {
-  position: absolute;
-  right: 5.5%;
-  bottom: 4.5%;
-  z-index: 1;
-  color: rgba(255, 107, 53, 0.78);
-  font-family: 'DSEG7 Classic', monospace;
-  font-style: italic;
-  font-weight: normal;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  white-space: nowrap;
-  text-shadow:
-    0 0 2px rgba(255, 100, 45, 0.35),
-    0 0.5px 1px rgba(0, 0, 0, 0.22);
+  touch-action: manipulation;
+  user-select: auto;
+  -webkit-user-select: auto;
 }
 
 .caption.placeholder {
@@ -331,6 +481,9 @@ function onNext() {
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  /* まだ隠れているフィルターがあることを示す両端フェード */
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
 }
 
 .filter-strip::-webkit-scrollbar {
@@ -382,6 +535,33 @@ function onNext() {
   object-fit: cover;
   display: block;
   -webkit-user-drag: none;
+}
+
+/* 短い端末: ストリップを隠し、ポラロイドを縮めてボタンまで収める（スワイプでフィルター切替は継続） */
+@media (max-height: 720px) {
+  .filter-strip {
+    display: none;
+  }
+
+  .preview {
+    gap: 12px;
+    padding-top: 28px;
+  }
+
+  .polaroid {
+    width: min(68vw, 260px);
+  }
+}
+
+@media (max-height: 640px) {
+  .preview {
+    gap: 10px;
+    padding-top: 20px;
+  }
+
+  .polaroid {
+    width: min(58vw, 220px);
+  }
 }
 
 .soft-button {

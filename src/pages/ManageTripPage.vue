@@ -1,15 +1,17 @@
 <template>
-  <main class="manage flow-page flow-shell">
+  <main class="manage flow-page flow-shell" :class="{ 'has-flow-bottom': Boolean(trip) }">
+    <HamburgerMenu />
+
     <MoyoLoading v-if="loading" :size="64" />
 
     <van-empty v-else-if="error" image="error" :description="error" />
 
     <template v-else-if="trip">
       <header class="head flow-head">
-        <div>
-          <h1>{{ trip.name }}</h1>
-          <p class="slug">{{ trip.slug }}</p>
-        </div>
+        <button type="button" class="back" :aria-label="t('common.back')" @click="goBack">
+          ←
+        </button>
+        <h1>{{ t('manage.settings') }}</h1>
       </header>
 
       <section class="status-block">
@@ -18,7 +20,9 @@
             {{ t('manage.photosStat', { count: trip.photos_count, max: trip.max_photos }) }}
             <span v-if="trip.is_revealed" class="badge">{{ t('manage.revealed') }}</span>
           </p>
-          <button type="button" class="flow-btn share-btn" @click="shareTrip">{{ t('manage.share') }}</button>
+          <button type="button" class="flow-btn share-btn" @click="shareTrip">
+            {{ t('manage.share') }}
+          </button>
         </div>
         <div class="progress" aria-hidden="true">
           <span class="progress-fill" :style="{ width: `${progressPct}%` }" />
@@ -27,28 +31,47 @@
 
       <hr class="flow-divider" />
 
-      <section class="share-meta">
-        <p class="flow-label">{{ t('manage.shareLink') }}</p>
-        <p class="share-url">{{ shareUrlShort }}</p>
-        <button type="button" class="secondary" @click="copy(shareUrl)">{{ t('manage.copyLink') }}</button>
-        <details class="qr-details">
-          <summary>{{ t('manage.showQr') }}</summary>
-          <QrCode :url="shareUrl" :size="168" />
-        </details>
-      </section>
-
-      <hr class="flow-divider" />
-
       <form class="form" @submit.prevent="onSave">
-        <h2 class="flow-section-title">{{ t('manage.settings') }}</h2>
-
-        <label class="field">
+        <div class="field">
           <span class="flow-label">{{ t('manage.displayName') }}</span>
-          <input v-model="form.name" class="flow-input" type="text" maxlength="60" />
-        </label>
+          <div class="name-row">
+            <template v-if="editingName">
+              <input
+                ref="nameInput"
+                v-model="form.name"
+                class="flow-input name-input"
+                type="text"
+                maxlength="60"
+                :aria-label="t('manage.displayName')"
+                @keydown.enter.prevent="finishNameEdit"
+              />
+              <button
+                type="button"
+                class="icon-btn"
+                :aria-label="t('common.ok')"
+                @click="finishNameEdit"
+              >
+                ✓
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="name-plain" @click="copyShare">
+                {{ form.name || trip.slug }}
+              </button>
+              <button
+                type="button"
+                class="icon-btn"
+                :aria-label="t('manage.editName')"
+                @click="startNameEdit"
+              >
+                <span class="edit-pencil" aria-hidden="true">✎</span>
+              </button>
+            </template>
+          </div>
+        </div>
 
         <div class="field">
-          <span class="flow-label">{{ tFilmLabel }}</span>
+          <span class="flow-label">{{ t('manage.filmCount') }}</span>
           <p class="film-fixed">{{ t('manage.filmFixed', { n: trip.max_photos }) }}</p>
         </div>
 
@@ -57,65 +80,53 @@
           <van-switch v-model="form.comment_required" size="22px" active-color="#bd5825" />
         </div>
 
-        <label class="field">
-          <span class="flow-label">{{ t('manage.dateLabel') }}</span>
-          <button type="button" class="flow-input picker-like" @click="formatOpen = true">
-            {{ dateFormatLabel }}
-          </button>
-        </label>
-
         <div class="field switch-row">
           <span class="flow-label">{{ t('create.showNicknames') }}</span>
           <van-switch v-model="form.show_nicknames" size="22px" active-color="#bd5825" />
         </div>
 
-        <p v-if="saveMsg" class="msg">{{ saveMsg }}</p>
-        <button class="flow-btn primary" type="submit" :disabled="saving">
-          {{ saving ? t('manage.saving') : t('manage.save') }}
-        </button>
+        <div class="flow-bottom">
+          <button class="flow-btn primary" type="submit" :disabled="saving || !dirty">
+            {{ saving ? t('manage.saving') : t('manage.save') }}
+          </button>
+          <button
+            v-if="!trip.is_revealed"
+            class="end-btn"
+            type="button"
+            :disabled="ending"
+            @click="onEnd"
+          >
+            {{ ending ? t('manage.ending') : t('manage.endBtn') }}
+          </button>
+        </div>
       </form>
-
-      <section v-if="!trip.is_revealed" class="danger-zone">
-        <hr class="flow-divider" />
-        <h2 class="flow-section-title">{{ t('manage.endSection') }}</h2>
-        <button class="end-btn" type="button" :disabled="ending" @click="onEnd">
-          {{ ending ? t('manage.ending') : t('manage.endBtn') }}
-        </button>
-      </section>
     </template>
-
-    <van-action-sheet
-      v-model:show="formatOpen"
-      :actions="formatActions"
-      :cancel-text="t('common.close')"
-      close-on-click-action
-      @select="onFormatSelect"
-    />
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import HamburgerMenu from '@/components/HamburgerMenu.vue'
 import MoyoLoading from '@/components/MoyoLoading.vue'
-import QrCode from '@/components/QrCode.vue'
-import { manageTripEnd, manageTripGet, manageTripUpdate, type ManageTrip } from '@/lib/tripApi'
-import type { DateFormat } from '@/types'
+import { manageTripEnd, manageTripGet, manageTripUpdate, tripPublicKey, type ManageTrip } from '@/lib/tripApi'
+import { buildTripShareMessage } from '@/lib/shareMessage'
 
 const { t } = useI18n()
 
 const props = defineProps<{ slug: string }>()
 const route = useRoute()
+const router = useRouter()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
 const trip = ref<ManageTrip | null>(null)
 const saving = ref(false)
 const ending = ref(false)
-const saveMsg = ref<string | null>(null)
-const formatOpen = ref(false)
+const editingName = ref(false)
+const nameInput = ref<HTMLInputElement | null>(null)
 
 const token = computed(() => String(route.query.token ?? ''))
 
@@ -123,51 +134,81 @@ const form = reactive({
   name: '',
   comment_required: true,
   show_nicknames: false,
-  date_format: 'YY.M.D' as DateFormat,
 })
 
-const tFilmLabel = computed(() => t('manage.filmCount'))
-
-const formatActions = computed(() => [
-  { name: 'YY.M.D', value: 'YY.M.D' },
-  { name: 'YYYY.M.D', value: 'YYYY.M.D' },
-  { name: 'YY.M.D HH:mm', value: 'YY.M.D HH:mm' },
-  { name: t('manage.dateNone'), value: 'none' },
-])
-
 const shareUrl = computed(() =>
-  trip.value ? `${window.location.origin}/t/${trip.value.slug}` : '',
+  trip.value ? `${window.location.origin}/t/${tripPublicKey(trip.value)}` : '',
 )
 
-const shareUrlShort = computed(() => (trip.value ? `…/t/${trip.value.slug}` : ''))
+const shareMessage = computed(() => {
+  if (!shareUrl.value) return ''
+  return buildTripShareMessage(t('common.shareTitle'), t('common.shareBody'), shareUrl.value)
+})
 
 const progressPct = computed(() => {
   if (!trip.value || trip.value.max_photos <= 0) return 0
   return Math.min(100, Math.round((trip.value.photos_count / trip.value.max_photos) * 100))
 })
 
-const dateFormatLabel = computed(() => {
-  const hit = formatActions.value.find((a) => a.value === form.date_format)
-  return hit?.name ?? form.date_format
+const dirty = computed(() => {
+  if (!trip.value) return false
+  const baselineComment = trip.value.comment_required !== false
+  const baselineNick = trip.value.show_nicknames === true
+  return (
+    form.name.trim() !== trip.value.name ||
+    form.comment_required !== baselineComment ||
+    form.show_nicknames !== baselineNick
+  )
 })
 
-function syncForm(t: ManageTrip) {
-  form.name = t.name
-  form.comment_required = t.comment_required !== false
-  form.show_nicknames = t.show_nicknames === true
-  form.date_format = (t.date_format as DateFormat) || 'YY.M.D'
+function syncForm(row: ManageTrip) {
+  form.name = row.name
+  form.comment_required = row.comment_required !== false
+  form.show_nicknames = row.show_nicknames === true
+  editingName.value = false
 }
 
-function onFormatSelect(action: { value: string }) {
-  form.date_format = action.value as DateFormat
+async function startNameEdit() {
+  editingName.value = true
+  await nextTick()
+  nameInput.value?.focus()
+  nameInput.value?.select()
 }
 
-async function copy(text: string) {
+function finishNameEdit() {
+  form.name = form.name.trim() || trip.value?.name || ''
+  editingName.value = false
+}
+
+async function copyShare() {
+  if (!shareMessage.value) return
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(shareMessage.value)
     showToast(t('common.copied'))
   } catch {
     showToast(t('common.copyFailed'))
+  }
+}
+
+function goBack() {
+  if (String(route.query.from ?? '') === 'success') {
+    const sessionId = String(route.query.session_id ?? '')
+    if (sessionId) {
+      void router.push({ path: '/create/success', query: { session_id: sessionId } })
+      return
+    }
+    if (String(route.query.free ?? '') === '1' && token.value) {
+      void router.push({
+        path: '/create/success',
+        query: { free: '1', slug: props.slug, token: token.value },
+      })
+      return
+    }
+  }
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    void router.push('/')
   }
 }
 
@@ -176,8 +217,8 @@ async function shareTrip() {
   if (navigator.share) {
     try {
       await navigator.share({
-        title: trip.value?.name ?? 'SHIORI',
-        text: t('manage.shareText'),
+        title: t('common.shareTitle'),
+        text: t('common.shareBody'),
         url: shareUrl.value,
       })
       return
@@ -185,7 +226,7 @@ async function shareTrip() {
       if ((e as Error).name === 'AbortError') return
     }
   }
-  await copy(shareUrl.value)
+  await copyShare()
 }
 
 async function boot() {
@@ -197,9 +238,9 @@ async function boot() {
   loading.value = true
   error.value = null
   try {
-    const t = await manageTripGet(props.slug, token.value)
-    trip.value = t
-    syncForm(t)
+    const row = await manageTripGet(props.slug, token.value)
+    trip.value = row
+    syncForm(row)
   } catch (e) {
     console.error(e)
     error.value = e instanceof Error ? e.message : t('manage.loadFailed')
@@ -209,19 +250,18 @@ async function boot() {
 }
 
 async function onSave() {
-  if (!trip.value || saving.value) return
+  if (!trip.value || saving.value || !dirty.value) return
   saving.value = true
-  saveMsg.value = null
+  editingName.value = false
   try {
     const updated = await manageTripUpdate(props.slug, token.value, {
-      name: form.name,
+      name: form.name.trim() || trip.value.name,
       comment_required: form.comment_required,
       show_nicknames: form.show_nicknames,
-      date_format: form.date_format,
+      date_format: 'none',
     })
     trip.value = updated
     syncForm(updated)
-    saveMsg.value = t('manage.saved')
     showToast(t('manage.saved'))
   } catch (e) {
     console.error(e)
@@ -259,20 +299,74 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.head h1 {
-  margin: 0;
+.back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -6px 0 0 -6px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+h1 {
+  margin: 4px 0 0;
   font-family: var(--font-display);
-  font-size: 1.65rem;
+  font-size: 1.45rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--ink-brown);
 }
 
-.slug {
-  margin: 6px 0 0;
-  font-size: 0.82rem;
-  color: var(--text-muted);
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.name-plain {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface-deep);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink-brown);
+  text-align: left;
   word-break: break-all;
+  cursor: pointer;
+}
+
+.name-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.edit-pencil {
+  display: inline-block;
+  transform: scaleX(-1);
 }
 
 .status-block {
@@ -330,45 +424,6 @@ onMounted(() => {
   background: var(--surface-deep);
 }
 
-.share-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.share-url {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink-brown);
-  word-break: break-all;
-}
-
-.secondary {
-  align-self: flex-start;
-  min-height: 44px;
-  border: 0;
-  padding: 8px 0;
-  background: transparent;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--accent);
-  cursor: pointer;
-}
-
-.qr-details {
-  color: var(--text-muted);
-  font-size: 0.8rem;
-}
-
-.qr-details summary {
-  cursor: pointer;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-}
-
 .form {
   display: flex;
   flex-direction: column;
@@ -388,11 +443,6 @@ onMounted(() => {
   padding: 4px 0;
 }
 
-.picker-like {
-  text-align: left;
-  cursor: pointer;
-}
-
 .film-fixed {
   margin: 0;
   font-size: 1.05rem;
@@ -401,22 +451,20 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.msg {
-  margin: 0;
-  font-size: 0.78rem;
-  color: #5a8f6a;
-  text-align: center;
-}
-
 .end-btn {
   width: 100%;
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
+  min-height: 48px;
+  border: 1px solid #d9a39a;
+  border-radius: 10px;
+  background: #fbf2f0;
+  color: #a33b2f;
   font: inherit;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
+}
+
+.end-btn:active:not(:disabled) {
+  background: #f5e4e0;
 }
 
 .end-btn:disabled {

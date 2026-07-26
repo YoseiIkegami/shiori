@@ -15,31 +15,6 @@
     />
 
     <template v-else-if="trip">
-      <!-- 検証用：開始前／開始後（slug=test のみ。本番 trip では非表示） -->
-      <div
-        v-if="showDebugToggle"
-        class="debug-toggle"
-        role="group"
-        aria-label="検証用モード切替"
-      >
-        <button
-          type="button"
-          class="debug-btn"
-          :class="{ active: mode === 'shoot' }"
-          @click="setDebugMode('shoot')"
-        >
-          開始前
-        </button>
-        <button
-          type="button"
-          class="debug-btn"
-          :class="{ active: mode === 'gallery' }"
-          @click="setDebugMode('gallery')"
-        >
-          開始後
-        </button>
-      </div>
-
       <RevealCompleteDialog
         v-if="showRevealDialog"
         @confirm="onRevealConfirm"
@@ -47,6 +22,7 @@
 
       <IntroDialog
         v-else-if="showIntroDialog"
+        :trip-name="trip.name || trip.slug"
         @confirm="onIntroConfirm"
       />
 
@@ -94,9 +70,7 @@
             <PhotoPreview
               v-if="shootState === 'preview' && previewUrl"
               :image-url="previewUrl"
-              :captured-at="capturedAt"
               :comment-required="commentRequired"
-              :date-format="dateFormat"
               v-model:comment="comment"
               v-model:filter-mode="filterMode"
               @next="goConfirm"
@@ -131,18 +105,22 @@
           :loading="galleryLoading"
           :error="galleryError"
           :animate-drop="galleryAnimateDrop"
+          :save-locked="trip.plan_id === 'free'"
           @retry="loadGallery"
-          @reported="onPhotoReported"
         />
       </Transition>
 
       <template v-if="mode === 'gallery' && trip.plan_id === 'free' && !showRevealDialog">
-        <div v-if="!freeCtaMin" class="free-cta">
+        <div
+          v-show="showFreeCtaPanel"
+          ref="freeCtaEl"
+          class="free-cta"
+        >
           <button
             type="button"
             class="free-cta__close"
             :aria-label="t('common.close')"
-            @click="freeCtaMin = true"
+            @click="minimizeFreeCta"
           >
             ×
           </button>
@@ -152,11 +130,12 @@
           </button>
         </div>
         <button
-          v-else
+          v-show="freeCtaMin"
+          ref="freeMiniEl"
           type="button"
           class="free-cta-mini"
           :aria-label="t('trip.freeEnd.cta')"
-          @click="freeCtaMin = false"
+          @click="expandFreeCta"
         >
           FREE
         </button>
@@ -170,9 +149,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import gsap from 'gsap'
 import { showToast } from 'vant'
 import CameraFrame from '@/components/CameraFrame.vue'
 import ShutterAnimation from '@/components/ShutterAnimation.vue'
@@ -189,6 +169,7 @@ import { gradePhotoBlob } from '@/lib/polaroidTone'
 import type { FilterMode } from '@/lib/filterMode'
 import {
   createMember,
+  clearFreeOrganizerToken,
   deleteFreeTrip,
   fetchTrip,
   fetchRevealedPhotos,
@@ -196,10 +177,11 @@ import {
   isTripRevealed,
   loadStoredMemberId,
   randomRotation,
+  readFreeOrganizerToken,
   updateMemberNickname,
   uploadPhoto,
 } from '@/lib/tripApi'
-import type { AppMode, DateFormat, RevealedPhoto, ShootState, Trip } from '@/types'
+import type { AppMode, RevealedPhoto, ShootState, Trip } from '@/types'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -212,15 +194,9 @@ const trip = ref<Trip | null>(null)
 const bootLoading = ref(true)
 const bootError = ref<string | null>(null)
 const mode = ref<AppMode>('shoot')
-const debugForceMode = ref<'shoot' | 'gallery' | null>(null)
-/** 開始前／開始後トグル：/t/test のみ表示（本番 trip では出さない） */
-const showDebugToggle = computed(
-  () => trip.value?.slug === 'test' || props.tripId === 'test',
-)
 const isPaid = computed(() => (trip.value ? isTripPaid(trip.value) : false))
 const commentRequired = computed(() => trip.value?.comment_required !== false)
 const showNicknames = computed(() => trip.value?.show_nicknames === true)
-const dateFormat = computed<DateFormat>(() => trip.value?.date_format ?? 'YY.M.D')
 const composeBusy = ref(false)
 
 const shootState = ref<ShootState>('idle')
@@ -250,8 +226,12 @@ const galleryAnimateDrop = ref(false)
 const showRevealDialog = ref(false)
 /** First visit intro — once per trip via localStorage. */
 const showIntroDialog = ref(false)
-/** FREE 誘導バナーの最小化状態（×で右上のアイコンに畳む） */
+/** FREE 誘導バナーの最小化状態（×で右上 FREE へ飛ばす） */
 const freeCtaMin = ref(false)
+const showFreeCtaPanel = ref(true)
+const freeCtaEl = ref<HTMLElement | null>(null)
+const freeMiniEl = ref<HTMLElement | null>(null)
+const freeCtaFlying = ref(false)
 const showNicknameDialog = ref(false)
 
 function boardRevealedKey(tripId: string) {
@@ -303,7 +283,6 @@ function revokePreview() {
 
 function syncModeFromTrip() {
   if (!trip.value) return
-  if (debugForceMode.value) return
 
   if (!isTripRevealed(trip.value)) {
     showRevealDialog.value = false
@@ -331,27 +310,13 @@ function syncModeFromTrip() {
   }
 }
 
-function setDebugMode(next: 'shoot' | 'gallery') {
-  debugForceMode.value = next
-  showRevealDialog.value = false
-  showIntroDialog.value = false
-  showNicknameDialog.value = false
-  mode.value = next
-  if (next === 'gallery') {
-    galleryAnimateDrop.value = false
-    void loadGallery({ preview: true })
-  } else if (shootState.value !== 'idle') {
-    resetToIdle()
-  }
-}
-
 async function boot() {
   bootLoading.value = true
   bootError.value = null
   try {
     const data = await fetchTrip(props.tripId)
     if (!data) {
-      bootError.value = t('trip.notFound')
+      void router.replace({ name: 'not-found' })
       return
     }
     trip.value = data
@@ -364,12 +329,11 @@ async function boot() {
   }
 }
 
-async function loadGallery(options: { preview?: boolean } = {}) {
+async function loadGallery() {
   galleryLoading.value = true
   galleryError.value = null
-  const preview = options.preview === true || debugForceMode.value === 'gallery'
   try {
-    const res = await fetchRevealedPhotos(trip.value?.id ?? props.tripId, { preview })
+    const res = await fetchRevealedPhotos(trip.value?.id ?? props.tripId)
     galleryPhotos.value = res.photos
     if (res.trip) {
       trip.value = {
@@ -385,12 +349,10 @@ async function loadGallery(options: { preview?: boolean } = {}) {
       const refreshed = await fetchTrip(props.tripId)
       if (refreshed) {
         trip.value = refreshed
-        if (!isTripRevealed(refreshed) && !preview) {
+        if (!isTripRevealed(refreshed)) {
           galleryPhotos.value = []
           galleryError.value = null
-          if (debugForceMode.value !== 'gallery') {
-            mode.value = 'shoot'
-          }
+          mode.value = 'shoot'
           return
         }
       }
@@ -460,7 +422,7 @@ async function goConfirm() {
         trimmed,
         modeAtConfirm,
         capturedAt.value,
-        dateFormat.value,
+        'none',
       ),
       modeAtConfirm === 'none'
         ? Promise.resolve(processedBlob.value)
@@ -541,10 +503,6 @@ async function onSentFadeDone() {
   resetToIdle()
 }
 
-function onPhotoReported(photoId: string) {
-  galleryPhotos.value = galleryPhotos.value.filter((p) => p.id !== photoId)
-}
-
 function onRevealConfirm() {
   if (!trip.value) return
   markBoardRevealed(trip.value.id)
@@ -609,35 +567,85 @@ watch(
   },
 )
 
-function freeTokenKey(slug: string) {
-  return `shiori.free.${slug}`
+async function minimizeFreeCta() {
+  if (freeCtaFlying.value || freeCtaMin.value) return
+  const panel = freeCtaEl.value
+  const reduce =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  if (!panel || reduce) {
+    freeCtaMin.value = true
+    showFreeCtaPanel.value = false
+    return
+  }
+
+  freeCtaFlying.value = true
+  freeCtaMin.value = true
+  await nextTick()
+  const mini = freeMiniEl.value
+  if (!mini) {
+    showFreeCtaPanel.value = false
+    freeCtaFlying.value = false
+    return
+  }
+
+  mini.style.visibility = 'hidden'
+  const from = panel.getBoundingClientRect()
+  const to = mini.getBoundingClientRect()
+  const dx = to.left + to.width / 2 - (from.left + from.width / 2)
+  const dy = to.top + to.height / 2 - (from.top + from.height / 2)
+  const scale = Math.max(0.18, Math.min(to.width / from.width, to.height / from.height))
+
+  await gsap.to(panel, {
+    x: dx,
+    y: dy,
+    scale,
+    opacity: 0,
+    duration: 0.48,
+    ease: 'power2.in',
+  })
+  showFreeCtaPanel.value = false
+  gsap.set(panel, { clearProps: 'transform,opacity' })
+  mini.style.visibility = ''
+  freeCtaFlying.value = false
+}
+
+function expandFreeCta() {
+  if (freeCtaFlying.value) return
+  freeCtaMin.value = false
+  showFreeCtaPanel.value = true
 }
 
 /**
- * FREE のお試し終了。pagehide での即削除はやめた（タブ切替・BFCache でも
- * 発火してデモ中に trip が消えるため）— 明示操作のここだけで消す。
+ * FREE のお試し終了。明示操作で trip を消し、同じ slug で有料登録できるようにする。
  * 放置分は TTL（2h）+ purge-expired-trips が回収する。
  */
 async function onFreeRestart() {
-  const t = trip.value
-  if (t?.plan_id === 'free' && t.slug) {
-    let token = ''
+  const row = trip.value
+  const slug = row?.slug ?? ''
+  let token = slug ? readFreeOrganizerToken(slug) : ''
+
+  if (row?.plan_id === 'free' && slug && token) {
     try {
-      token = sessionStorage.getItem(freeTokenKey(t.slug)) ?? ''
-    } catch {
-      /* ignore */
-    }
-    if (token) {
-      try {
-        await deleteFreeTrip(t.slug, token)
-        sessionStorage.removeItem(freeTokenKey(t.slug))
-      } catch (e) {
-        // 消せなくても作成画面へ。slug 重複は作成側が表示する
-        console.error(e)
-      }
+      await deleteFreeTrip(slug, token)
+      clearFreeOrganizerToken(slug)
+    } catch (e) {
+      console.error(e)
+      showToast(t('trip.freeEnd.deleteFailed'))
+      // token は作成画面でも再試行できるよう残す
     }
   }
-  void router.push('/create')
+
+  void router.push({
+    path: '/create',
+    query: {
+      upgrade: '1',
+      ...(slug ? { slug } : {}),
+      ...(row?.name ? { name: row.name } : {}),
+      ...(token ? { token } : {}),
+    },
+  })
 }
 
 onBeforeUnmount(() => {
@@ -668,8 +676,8 @@ onBeforeUnmount(() => {
 .nick-chip {
   position: absolute;
   top: calc(12px + var(--safe-top, 0px));
-  /* 右上のグローバル言語スイッチャーを避ける */
-  right: 64px;
+  /* 右上のハンバーガーメニューを避ける */
+  right: 60px;
   z-index: 5;
   max-width: 42%;
   overflow: hidden;
@@ -695,46 +703,6 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 
-.debug-toggle {
-  position: fixed;
-  top: calc(48px + var(--safe-top, 0px));
-  right: 10px;
-  z-index: 10001;
-  display: flex;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(248, 247, 244, 0.82);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-raised-sm);
-  backdrop-filter: blur(8px);
-  opacity: 0.52;
-}
-
-.debug-toggle:hover,
-.debug-toggle:focus-within {
-  opacity: 0.9;
-}
-
-.debug-btn {
-  appearance: none;
-  border: 0;
-  margin: 0;
-  padding: 6px 10px;
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-ui);
-}
-
-.debug-btn.active {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.72);
-  font-weight: 600;
-}
-
 .boot-loader {
   padding: 120px 0;
 }
@@ -746,30 +714,31 @@ onBeforeUnmount(() => {
   z-index: 10000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-  max-width: min(62%, 260px);
-  padding: 12px 34px 12px 14px;
+  gap: 10px;
+  align-items: stretch;
+  max-width: min(72%, 300px);
+  padding: 16px 16px 14px;
   border-radius: 14px;
-  background: rgba(248, 247, 244, 0.94);
-  border: 1px solid var(--line);
-  box-shadow: 0 4px 16px rgba(60, 50, 40, 0.18);
-  backdrop-filter: blur(8px);
+  background: rgba(248, 247, 244, 0.52);
+  border: 1px solid rgba(230, 226, 218, 0.7);
+  box-shadow: 0 4px 16px rgba(60, 50, 40, 0.14);
+  backdrop-filter: blur(10px);
+  transform-origin: center center;
 }
 
 .free-cta__close {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 4px;
+  right: 4px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 1.05rem;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ink-brown);
+  font-size: 1.55rem;
   line-height: 1;
   cursor: pointer;
 }
@@ -777,7 +746,6 @@ onBeforeUnmount(() => {
 .free-cta-mini {
   position: fixed;
   top: calc(12px + var(--safe-top, 0px));
-  /* 右上のグローバル言語スイッチャーを避ける */
   right: 60px;
   z-index: 10000;
   min-height: 34px;
@@ -796,22 +764,26 @@ onBeforeUnmount(() => {
 
 .free-cta__note {
   margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--text-muted);
+  padding-right: 36px;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-line;
 }
 
 .free-cta__btn {
+  align-self: flex-end;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 40px;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: var(--accent, #bd5825);
   color: #fff;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;

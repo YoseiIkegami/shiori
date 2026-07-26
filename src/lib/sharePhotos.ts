@@ -80,37 +80,32 @@ export type ShareResult =
 /** Share an already-prepared File list (second tap after gesture was lost). */
 export async function sharePreparedFiles(files: File[]): Promise<ShareResult> {
   if (!files.length) return { status: 'unsupported' }
-  if (!canShareFiles(files.length === 1 ? files : files.slice(0, SHARE_CHUNK_SIZE))) {
-    for (const file of files) downloadFallback(file)
-    return { status: 'downloaded' }
-  }
 
-  try {
-    if (canShareFiles(files)) {
-      await navigator.share({ files })
-      return { status: 'shared' }
-    }
-  } catch (error) {
-    if (isUserAbort(error)) return { status: 'aborted' }
-    console.warn('一括共有に失敗、分割共有にフォールバックします', error)
-  }
+  let anyShared = false
+  let anyDownloaded = false
 
   for (let i = 0; i < files.length; i += SHARE_CHUNK_SIZE) {
     const chunk = files.slice(i, i + SHARE_CHUNK_SIZE)
     if (!canShareFiles(chunk)) {
       for (const file of chunk) downloadFallback(file)
+      anyDownloaded = true
       continue
     }
     try {
       await navigator.share({ files: chunk })
+      anyShared = true
     } catch (error) {
       if (isUserAbort(error)) return { status: 'aborted' }
       if (isGestureLost(error)) return { status: 'needs_retap', files }
       console.warn('chunk share failed', error)
       for (const file of chunk) downloadFallback(file)
+      anyDownloaded = true
     }
   }
-  return { status: 'shared' }
+
+  if (anyShared) return { status: 'shared' }
+  if (anyDownloaded) return { status: 'downloaded' }
+  return { status: 'unsupported' }
 }
 
 export type SaveItem = {

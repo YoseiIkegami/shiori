@@ -42,12 +42,17 @@
               v-if="overlayNickname(photo)"
               class="photo-card__nick handwriting"
             >{{ overlayNickname(photo) }}</span>
-            <span
+            <!-- 傾きと同じ transform 内に置き、角に追従させる -->
+            <button
               v-if="selecting"
+              type="button"
               class="photo-card__check"
               :class="{ on: selectedIds.includes(photo.id) }"
-              aria-hidden="true"
-            >✓</span>
+              data-no-drag
+              :aria-pressed="selectedIds.includes(photo.id)"
+              :aria-label="t('board.selectPhoto')"
+              @click.stop="toggleSelect(photo.id)"
+            >✓</button>
           </a>
         </div>
       </div>
@@ -57,7 +62,9 @@
           v-if="photos.length > 1"
           type="button"
           class="select-fab neu-raised"
-          @click="startSelect"
+          :class="{ locked: saveLocked }"
+          :aria-disabled="saveLocked"
+          @click="onSelectFab"
         >
           <span class="fab-icon" aria-hidden="true">✓</span>
           <span class="fab-label">{{ t('board.select') }}</span>
@@ -65,9 +72,11 @@
         <button
           type="button"
           class="save-all-fab neu-raised"
-          :disabled="savingAll"
+          :class="{ locked: saveLocked }"
+          :disabled="savingAll && !saveLocked"
+          :aria-disabled="saveLocked"
           :aria-label="t('board.saveAll')"
-          @click="onSaveAll"
+          @click="onSaveAllFab"
         >
           <span class="fab-icon" aria-hidden="true">↓</span>
           <span class="fab-label">{{ pendingShareFiles ? t('board.openShare') : t('board.saveAll') }}</span>
@@ -122,7 +131,6 @@ import {
   type SaveItem,
   type ShareResult,
 } from '@/lib/sharePhotos'
-import { reportPhoto } from '@/lib/tripApi'
 import { loadPhotoPositions, savePhotoPosition } from '@/lib/photoPositions'
 import MoyoLoading from '@/components/MoyoLoading.vue'
 import type { RevealedPhoto } from '@/types'
@@ -140,7 +148,11 @@ const props = defineProps<{
   error?: string | null
   /** First unlock visit: GSAP drop with stagger amount 1.2. Return visits: skip. */
   animateDrop?: boolean
+  /** FREE trial: disable save / select */
+  saveLocked?: boolean
 }>()
+
+const saveLocked = computed(() => Boolean(props.saveLocked))
 
 function overlayNickname(photo: RevealedPhoto): string | null {
   if (!props.showNicknames) return null
@@ -150,7 +162,6 @@ function overlayNickname(photo: RevealedPhoto): string | null {
 
 const emit = defineEmits<{
   retry: []
-  reported: [photoId: string]
 }>()
 
 type LaidOut = RevealedPhoto & {
@@ -251,12 +262,6 @@ const SAVE_ICON_SVG =
   '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" d="M8 24h16"/>' +
   '</svg>'
 
-const REPORT_ICON_SVG =
-  '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">' +
-  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M8 6v20"/>' +
-  '<path fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M8 7h14l-3 5 3 5H8"/>' +
-  '</svg>'
-
 const SELECT_ICON_SVG =
   '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">' +
   '<circle cx="16" cy="16" r="10.5" fill="none" stroke="#fff" stroke-width="2.2"/>' +
@@ -286,61 +291,56 @@ function initLightbox() {
     showAnimationDuration: 280,
     hideAnimationDuration: 240,
     zoom: false,
+    bgClickAction: 'close',
+    tapAction: (_point: unknown, evt: PointerEvent | MouseEvent | TouchEvent) => {
+      const target = evt.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('.pswp__button, .pswp__top-bar, .pswp__preloader')) return
+      if (target.closest('.pswp__img')) return
+      lightbox?.pswp?.close()
+    },
   })
 
   lightbox.on('uiRegister', () => {
-    lightbox?.pswp?.ui?.registerElement({
-      name: 'select-button',
-      className: 'pswp__button--select-button',
-      order: 8,
-      isButton: true,
-      tagName: 'button',
-      title: t('board.select'),
-      html: SELECT_ICON_SVG,
-      onInit: (el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
-        const sync = () => {
+    if (!saveLocked.value) {
+      lightbox?.pswp?.ui?.registerElement({
+        name: 'select-button',
+        className: 'pswp__button--select-button',
+        order: 8,
+        isButton: true,
+        tagName: 'button',
+        title: t('board.select'),
+        html: SELECT_ICON_SVG,
+        onInit: (el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
+          const sync = () => {
+            const id = currentPhotoId(pswp)
+            el.classList.toggle('on', Boolean(id && selectedIds.value.includes(id)))
+          }
+          lightboxSelectSync = sync
+          pswp.on('change', sync)
+          sync()
+        },
+        onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
           const id = currentPhotoId(pswp)
-          el.classList.toggle('on', Boolean(id && selectedIds.value.includes(id)))
-        }
-        lightboxSelectSync = sync
-        pswp.on('change', sync)
-        sync()
-      },
-      onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
-        const id = currentPhotoId(pswp)
-        if (!id) return
-        if (!selecting.value) selecting.value = true
-        toggleSelect(id)
-      },
-    })
+          if (!id) return
+          if (!selecting.value) selecting.value = true
+          toggleSelect(id)
+        },
+      })
 
-    lightbox?.pswp?.ui?.registerElement({
-      name: 'save-button',
-      className: 'pswp__button--save-button',
-      order: 9,
-      isButton: true,
-      tagName: 'button',
-      title: t('board.save'),
-      html: SAVE_ICON_SVG,
-      onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
-        void onSaveCurrentSlide(pswp)
-      },
-    })
-
-    // 通報は通常操作ではないため、他のボタンから離して左下に置く（appendTo root + CSS）
-    lightbox?.pswp?.ui?.registerElement({
-      name: 'report-button',
-      className: 'pswp__button--report-button',
-      order: 10,
-      isButton: true,
-      tagName: 'button',
-      appendTo: 'root',
-      title: t('board.report'),
-      html: REPORT_ICON_SVG,
-      onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
-        void onReportCurrentSlide(pswp)
-      },
-    })
+      lightbox?.pswp?.ui?.registerElement({
+        name: 'save-button',
+        className: 'pswp__button--save-button',
+        order: 9,
+        isButton: true,
+        tagName: 'button',
+        title: t('board.save'),
+        html: SAVE_ICON_SVG,
+        onClick: (_event: MouseEvent, _el: HTMLElement, pswp: InstanceType<typeof PhotoSwipe>) => {
+          void onSaveCurrentSlide(pswp)
+        },
+      })
+    }
 
     if (props.showNicknames) {
       lightbox?.pswp?.ui?.registerElement({
@@ -402,13 +402,14 @@ function initDraggables() {
       zIndexBoost: true,
       // ~8px: short taps open PhotoSwipe; longer moves count as drag.
       minimumMovement: 8,
-      onClick() {
+      // 写真本体タップ=常に拡大、チェックボタンタップ=選択（onClick は実クリックイベントを
+      // 第一引数で受け取る＝GSAP Draggable.js の _dispatchEvent 実装）。
+      // Draggable のネイティブ click リスナーは capture フェーズで登録されているため、
+      // ボタン側の @click.stop では止められず、ここで event.target を見て弾く必要がある。
+      onClick(event: Event) {
+        const originTarget = event?.target as HTMLElement | null
+        if (originTarget?.closest('[data-no-drag]')) return
         const el = this.target as HTMLElement
-        if (selecting.value) {
-          const photoId = el.dataset.photoId
-          if (photoId) toggleSelect(photoId)
-          return
-        }
         const index = Number(el.dataset.pswpIndex)
         if (Number.isFinite(index)) openLightbox(index)
       },
@@ -422,19 +423,21 @@ function initDraggables() {
 
   if (props.animateDrop && cards.length && dropPlayedForTrip !== props.tripId) {
     dropPlayedForTrip = props.tripId
-    gsap.fromTo(
+    const dropTl = gsap.timeline({ onComplete: enableDrag })
+    dropTl.fromTo(
       cards,
       {
-        y: (_i, el) => endY(el as HTMLElement) - 160,
+        y: (_i, el) => endY(el as HTMLElement) - 200,
         opacity: 0,
+        scale: 0.92,
       },
       {
         y: (_i, el) => endY(el as HTMLElement),
         opacity: 1,
-        duration: 0.65,
-        ease: 'power2.out',
-        stagger: { amount: 1.2 },
-        onComplete: enableDrag,
+        scale: 1,
+        duration: 0.78,
+        ease: 'bounce.out',
+        stagger: { amount: 1.25, from: 'random' },
       },
     )
   } else {
@@ -461,6 +464,22 @@ function onSaveCurrentSlide(pswp: InstanceType<typeof PhotoSwipe>) {
 function startSelect() {
   selecting.value = true
   selectedIds.value = []
+}
+
+function onSelectFab() {
+  if (saveLocked.value) {
+    showToast(t('board.trialSaveLocked'))
+    return
+  }
+  startSelect()
+}
+
+function onSaveAllFab() {
+  if (saveLocked.value) {
+    showToast(t('board.trialSaveLocked'))
+    return
+  }
+  void onSaveAll()
 }
 
 function cancelSelect() {
@@ -525,28 +544,6 @@ async function doSave(target: RevealedPhoto[], variant: SaveVariant) {
   } finally {
     shareBusy.value = false
     savingAll.value = false
-  }
-}
-
-async function onReportCurrentSlide(pswp: InstanceType<typeof PhotoSwipe>) {
-  const element = pswp.currSlide?.data?.element as HTMLElement | undefined
-  const photoId = element?.getAttribute('data-photo-id')
-  if (!photoId) {
-    showToast(t('board.reportFailed'))
-    return
-  }
-  if (!window.confirm(t('board.reportConfirm'))) return
-
-  shareBusy.value = true
-  try {
-    await reportPhoto(photoId)
-    pswp.close()
-    emit('reported', photoId)
-    showToast(t('board.reported'))
-  } catch {
-    showToast(t('board.reportFailed'))
-  } finally {
-    shareBusy.value = false
   }
 }
 
@@ -651,6 +648,11 @@ onBeforeUnmount(() => {
   cursor: grabbing;
 }
 
+.photo-card:active .photo-card__link {
+  transform: rotate(var(--rot, 0deg)) scale(0.97);
+  transition: transform 0.12s ease;
+}
+
 .photo-card__link {
   position: relative;
   display: block;
@@ -704,19 +706,24 @@ onBeforeUnmount(() => {
 
 .photo-card__check {
   position: absolute;
-  top: 6%;
-  left: 6%;
+  top: 5%;
+  left: 5%;
   z-index: 2;
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
+  padding: 0;
+  margin: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.92);
   border: 1.5px solid var(--line);
   color: transparent;
+  font: inherit;
   font-size: 15px;
   font-weight: 700;
+  cursor: pointer;
+  pointer-events: auto;
   box-shadow: 0 1px 4px rgba(60, 50, 40, 0.2);
 }
 
@@ -781,9 +788,16 @@ onBeforeUnmount(() => {
   /* Raised by .neu-raised — do not use inset here */
   font: inherit;
   font-size: 0.82rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: box-shadow 0.15s ease;
+}
+
+.select-fab.locked,
+.save-all-fab.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .save-all-fab:disabled {
@@ -823,25 +837,15 @@ onBeforeUnmount(() => {
   opacity: 1 !important;
 }
 
-/* 通報は通常操作ではない — 保存系から離して左下に単独配置 */
-.pswp__button--report-button {
-  position: absolute !important;
-  top: auto !important;
-  left: max(10px, env(safe-area-inset-left));
-  bottom: max(14px, env(safe-area-inset-bottom));
-  z-index: 10;
-  width: 44px;
-  height: 44px;
-  color: #fff !important;
-  opacity: 0.6 !important;
-}
-
 .pswp__button--save-button .pswp__icn,
-.pswp__button--select-button .pswp__icn,
-.pswp__button--report-button .pswp__icn {
+.pswp__button--select-button .pswp__icn {
   color: #fff;
   fill: none;
   opacity: 1;
+}
+
+.pswp__bg {
+  cursor: pointer;
 }
 
 .pswp__button--select-button .pswp__icn circle {

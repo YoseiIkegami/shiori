@@ -6,7 +6,10 @@
     "copy": "コピー",
     "copied": "コピーしました",
     "copyFailed": "コピーに失敗しました",
+    "shareTitle": "栞 -インスタントカメラ-",
+    "shareBody": "思い出を残すための、使い捨てカメラ",
     "language": "言語",
+    "menu": "メニュー",
     "legal": {
       "terms": "利用規約",
       "privacy": "プライバシー",
@@ -14,9 +17,9 @@
     }
   },
   "home": {
-    "brand": "SHIORI",
-    "brandSub": "Instant Camera",
-    "headline": "旅行中はお休み。\n旅の終わりに、みんなで開こう。",
+    "brand": "栞",
+    "brandSub": "-インスタントカメラ-",
+    "headline": "旅のページに、\n栞をはさむカメラ。",
     "cta": "旅をはじめる",
     "howto": {
       "label": "使い方",
@@ -24,18 +27,15 @@
       "slideN": "{n}枚目",
       "shoot": {
         "title": "撮る",
-        "body": "旅のあいだ、写真を残す。",
-        "caption": "いまの一枚"
+        "body": "旅を記録しよう。"
       },
       "seal": {
-        "title": "隠す",
-        "body": "枚数がそろうまで、中身は見えない。",
-        "caption": "封をしたまま"
+        "title": "しまう",
+        "body": "旅を楽もう。"
       },
       "open": {
         "title": "開く",
-        "body": "揃ったら、みんなで一斉に見る。",
-        "caption": "ひらく瞬間"
+        "body": "思い出を振り返ろう。"
       }
     }
   },
@@ -44,41 +44,138 @@
     "stepSetup": "旅のなまえと設定",
     "stepPlan": "プランを選ぶ",
     "nameLabel": "旅のなまえ",
-    "namePlaceholder": "例: natsu-ibuki",
-    "nameHint": "英数字とハイフンで 3〜30文字",
+    "namePlaceholder": "例: 夏の海",
+    "nameHint": "60文字まで",
     "suggest": "提案",
     "next": "次へ",
-    "checking": "名前を確認中…",
-    "nameOk": "この名前は使えます",
-    "checkFailed": "確認に失敗しました",
     "planLabel": "プラン",
+    "filmCountLabel": "フィルムの枚数",
+    "filmCountValue": "{n} 枚",
     "commentRequired": "ひとことを必須にする",
     "showNicknames": "撮った人の名前を表示",
-    "showDate": "日付を表示する",
     "preparing": "準備中…",
     "submitFree": "無料ではじめる",
-    "submitPaid": "{price} で旅をはじめる",
-    "freeNote": "閉じるとまもなく消えます",
+    "submitPaid": "{price}を支払う",
     "createFailed": "発行に失敗しました",
+    "nameRequired": "旅のなまえを入力してください",
     "noCheckoutUrl": "Checkout URL が取得できませんでした"
+  },
+  "nameSuggest": {
+    "adjectives": [
+      "にぎやかな",
+      "静かな",
+      "やさしい",
+      "あたたかい",
+      "ちいさな",
+      "おおきな",
+      "あかるい",
+      "ゆるい",
+      "のんびりした",
+      "きらきらした",
+      "ふしぎな",
+      "あたらしい",
+      "すこし遠い",
+      "まぶしい",
+      "やわらかい",
+      "ほろ苦い"
+    ],
+    "prefixes": [
+      "風",
+      "星",
+      "夏",
+      "海",
+      "空",
+      "夜",
+      "朝",
+      "旅",
+      "光",
+      "波",
+      "森",
+      "雪",
+      "花",
+      "月",
+      "虹",
+      "雲",
+      "灯",
+      "道",
+      "丘",
+      "川",
+      "陽",
+      "青",
+      "白"
+    ],
+    "suffixes": [
+      "旅",
+      "記憶",
+      "海",
+      "空",
+      "記録",
+      "日々",
+      "景色",
+      "時間",
+      "アルバム",
+      "しおり",
+      "写真",
+      "休日",
+      "週末",
+      "朝",
+      "夜",
+      "道",
+      "メモ",
+      "フィルム",
+      "きおく"
+    ]
   },
   "slug": {
     "format": "英数字とハイフンで 3〜30文字",
     "reserved": "この名前は使えません",
-    "taken": "この名前はすでに使われています"
+    "taken": "この名前はすでに使われています",
+    "prefixes": [
+      "kaze",
+      "nami",
+      "hoshi",
+      "yozora",
+      "natsu",
+      "tabi",
+      "sora",
+      "umi",
+      "yuu",
+      "asa",
+      "haru",
+      "aki",
+      "mori",
+      "hana",
+      "tsuki"
+    ],
+    "suffixes": [
+      "tabi",
+      "michi",
+      "kioku",
+      "tabidachi",
+      "kaidou",
+      "tsuki",
+      "hikari",
+      "iro",
+      "oto",
+      "hane",
+      "kage",
+      "ashiato",
+      "yume",
+      "ibuki"
+    ]
   },
   "plan": {
     "free": {
       "name": "FREE",
-      "summary": "3枚・お試し"
+      "summary": "～3枚・お試し"
     },
     "standard": {
       "name": "Standard",
-      "summary": "50枚・7日"
+      "summary": "～50枚・7日"
     },
     "plus": {
       "name": "Premium",
-      "summary": "500枚・ずっと残る"
+      "summary": "～500枚・ずっと残る"
     }
   },
   "trip": {
@@ -91,8 +188,9 @@
     "sendFailed": "送信に失敗しました。もう一度お試しください。",
     "commentNeeded": "コメントを入力してください",
     "freeEnd": {
-      "note": "おためしはここまで。この写真はまもなく消えます。",
-      "cta": "旅をはじめる"
+      "note": "トライアルは以上です。\n新しいカメラを持って出かけましょう。",
+      "cta": "プランをアップグレードする",
+      "deleteFailed": "トライアルの削除に失敗しました"
     }
   },
   "camera": {
@@ -155,6 +253,7 @@
     "saveAll": "すべて保存",
     "openShare": "共有を開く",
     "select": "選ぶ",
+    "selectPhoto": "この写真を選択",
     "cancelSelect": "やめる",
     "saveSelected": "{n}枚を保存",
     "saveSelectedConfirm": "選択中の{n}枚を保存しますか？",
@@ -168,26 +267,22 @@
     "imageFailed": "画像を取得できませんでした",
     "saveFailed": "保存に失敗しました",
     "downloadStarted": "ダウンロードを開始しました",
-    "needsRetap": "準備ができました。もう一度押してください"
+    "needsRetap": "準備ができました。もう一度押してください",
+    "trialSaveLocked": "トライアルでは保存できません"
   },
   "manage": {
     "share": "共有する",
     "revealed": "解禁済み",
     "photosStat": "{count} / {max} 枚",
-    "shareLink": "共有リンク",
-    "copyLink": "リンクをコピー",
-    "showQr": "QRコードを表示",
-    "settings": "旅の設定",
+    "settings": "設定",
+    "editName": "表示名を編集",
     "displayName": "表示名",
     "filmCount": "フィルムの枚数",
     "filmFixed": "{n} 枚",
-    "dateLabel": "日付の表示",
-    "dateNone": "なし",
     "save": "保存",
     "saving": "保存中…",
     "saved": "保存しました",
     "saveFailed": "保存に失敗しました",
-    "endSection": "終了",
     "endBtn": "旅を終了して写真を開く",
     "ending": "処理中…",
     "endConfirmTitle": "旅を終了しますか？",
@@ -196,25 +291,21 @@
     "endFailed": "終了に失敗しました",
     "tokenRequired": "トークンが必要です",
     "loadFailed": "読み込みに失敗しました",
-    "opFailed": "操作に失敗しました",
-    "shareText": "旅の写真、一緒に残そう"
+    "opFailed": "操作に失敗しました"
   },
   "success": {
-    "titlePaid": "旅のリンクができました",
+    "titlePaid": "カメラの準備ができました",
     "titlePending": "決済を確認しています",
     "pendingLead": "しばらくしてから再読み込みしてください",
-    "how1": "リンクをみんなに送る",
-    "how1Note": "写真はこのリンクの中に集まります。LINE などでそのまま共有できます",
-    "how2": "旅のあいだ、それぞれ撮る",
-    "how3": "終わったら、みんなで一斉に開く",
-    "otherShare": "その他の共有方法",
-    "sendLink": "リンクを送る",
+    "how1": "リンクを送る",
+    "how1Note": "これがみんなのカメラになります",
+    "how2": "旅のあいだ、気ままに撮る",
+    "how2Note": "すべて撮り切るまで、中身は誰にも見えません",
+    "how3": "最後に思い出を振り返る",
+    "showQr": "QRコードを表示",
+    "hideQr": "イラストを表示",
     "copyLink": "リンクをコピー",
-    "settings": "幹事メニュー",
-    "emailHint": "設定リンクはメールにも送信予定です",
-    "bookmark": "幹事用リンクはブックマークにも保存してください",
-    "copyManage": "設定リンクをコピー",
-    "openManage": "設定ページを開く",
+    "openSettings": "設定",
     "startShooting": "撮影をはじめる",
     "noSession": "セッションが見つかりません",
     "resultFailed": "結果の取得に失敗しました"
