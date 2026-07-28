@@ -24,6 +24,7 @@
 | [データモデル](./data-model.md) | DB スキーマ・RLS 方針 |
 | [バックエンド API](./backend.md) | Edge Functions・クライアント API |
 | [デザインシステム](./design-system.md) | ニューモーフィズム・文言・共通 UI |
+| [フロントエンド規約・ツール](./frontend-tooling.md) | UI レギュレーション入口・ESLint / Prettier |
 | [環境・デプロイ](./environments.md) | 本番 / テスト・デプロイ手順と禁止事項 |
 | [多言語](./i18n.md) | vue-i18n・locale・通貨 |
 | [Cloudflare / CSAM](./cloudflare-csam.md) | プロキシ・スキャン・削除 Cron 手順 |

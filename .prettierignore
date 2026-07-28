@@ -1,0 +1,14 @@
+# Managed / generated
+node_modules
+dist
+dist-ssr
+coverage
+package-lock.json
+components.d.ts
+*.d.ts
+
+# Not part of the create-vue frontend source (own toolchain / prose)
+supabase
+public
+docs
+*.md
