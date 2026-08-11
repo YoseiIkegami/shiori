@@ -54,6 +54,8 @@ APP_ORIGIN=https://shiori.ikg-systems.com
 
 metadata: `trip_id`, `slug`, `plan_id`, `type`
 
+Checkout Session は `managed_payments.enabled=false` を渡す（新アカウント既定の Managed Payments が `price_data` に税コードを要求するため）。
+
 ### stripe-webhook
 
 - `checkout.session.completed`

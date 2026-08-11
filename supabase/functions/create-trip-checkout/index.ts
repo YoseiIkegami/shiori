@@ -400,6 +400,9 @@ Deno.serve(async (req) => {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       locale: checkoutLocale,
+      // New Stripe accounts enable Managed Payments by default, which requires
+      // product tax_code. SHIORI uses classic Checkout + price_data only.
+      managed_payments: { enabled: false },
       line_items: [
         {
           quantity: 1,
@@ -419,7 +422,7 @@ Deno.serve(async (req) => {
       },
       success_url: successUrl,
       cancel_url: cancelUrl,
-    })
+    } as Stripe.Checkout.SessionCreateParams)
 
     return json(
       { url: session.url, trip_id: trip.id, slug: trip.slug, share_token: trip.share_token, plan_id: planId },
