@@ -24,7 +24,8 @@ description: >-
 
 1. Read [`docs/environments.md`](../../../docs/environments.md) if unsure
 2. Run `npm run build` — **fail → stop, do not deploy**
-3. Run `npx vercel --prod --yes`
+3. Run `npx vercel --prod --yes`  
+   （任意ブランチからの手動反映。`production` への push による自動デプロイとは別経路）
 4. Tell the user the verification URL only:
 
    `https://shiori.ikg-systems.com/t/test`

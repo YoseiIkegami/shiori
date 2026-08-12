@@ -22,7 +22,7 @@
 | Build | `npm run build` |
 | リモート確認 | `https://shiori.ikg-systems.com/t/test` のみ |
 | 本番旅 | `/t/summer-boardgames` は検証・データ改変に使わない |
-| デプロイ | 「テスト環境にデプロイ」等の明示時のみ → skill `deploy-test` |
+| デプロイ | 「テスト環境にデプロイ」→ skill `deploy-test`。`production` マージ依頼時は push で Vercel 自動デプロイ |
 | 仕様 | SPEC → docs → コード（[`spec-authority.mdc`](../.cursor/rules/spec-authority.mdc)） |
 
 手順の正本: [`environments.md`](./environments.md)。

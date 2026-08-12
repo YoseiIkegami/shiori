@@ -151,6 +151,25 @@ function bindStreamToVideo(video: HTMLVideoElement, stream: MediaStream) {
   video.muted = true
 }
 
+function watchTrackEnded(stream: MediaStream) {
+  for (const track of stream.getTracks()) {
+    track.addEventListener(
+      'ended',
+      () => {
+        streamReady.value = false
+        if (document.visibilityState === 'visible' && !switchingCamera.value) {
+          void startCamera(facingMode.value)
+        }
+      },
+      { once: true },
+    )
+  }
+}
+
+function isStreamLive() {
+  return Boolean(mediaStream?.getTracks().some((track) => track.readyState === 'live'))
+}
+
 async function playVideo(video: HTMLVideoElement) {
   if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
     await new Promise<void>((resolve) => {
@@ -172,6 +191,13 @@ function stopCamera() {
   streamReady.value = false
 }
 
+function isPermissionDenied(error: unknown) {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError')
+  )
+}
+
 async function startCamera(facing: Facing = facingMode.value) {
   cameraError.value = null
   streamReady.value = false
@@ -189,15 +215,25 @@ async function startCamera(facing: Facing = facingMode.value) {
   stopCamera()
 
   const tryGetUserMedia = async (constraints: MediaStreamConstraints) => {
-    mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+    const stream = await navigator.mediaDevices.getUserMedia(constraints)
+    stopCamera()
+    mediaStream = stream
     facingMode.value = facing
+    watchTrackEnded(stream)
     const video = videoEl.value
     if (!video) return
-    bindStreamToVideo(video, mediaStream)
+    bindStreamToVideo(video, stream)
     const bg = bgVideoEl.value
-    if (bg) bindStreamToVideo(bg, mediaStream)
-    await playVideo(video)
-    if (bg) await playVideo(bg).catch(() => undefined)
+    if (bg) bindStreamToVideo(bg, stream)
+    try {
+      await playVideo(video)
+      if (bg) await playVideo(bg).catch(() => undefined)
+    } catch (playError) {
+      console.error(playError)
+      stopCamera()
+      cameraError.value = t('camera.errorGeneric')
+      return
+    }
     streamReady.value = video.videoWidth > 0
   }
 
@@ -212,17 +248,23 @@ async function startCamera(facing: Facing = facingMode.value) {
     })
   } catch (error) {
     console.error(error)
-    const name = error instanceof DOMException ? error.name : ''
-    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    stopCamera()
+    if (isPermissionDenied(error)) {
       cameraError.value = t('camera.errorDenied')
       return
     }
 
+    const name = error instanceof DOMException ? error.name : ''
     try {
       await tryGetUserMedia({ audio: false, video: true })
       return
     } catch (retryError) {
       console.error(retryError)
+      stopCamera()
+      if (isPermissionDenied(retryError)) {
+        cameraError.value = t('camera.errorDenied')
+        return
+      }
     }
 
     if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
@@ -249,7 +291,18 @@ async function toggleFacing() {
   }
 }
 
-async function captureFromStream(): Promise<File | null> {
+function dataUrlToFile(dataUrl: string, filename: string): File | null {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl)
+  if (!match) return null
+  const mime = match[1]
+  const binary = atob(match[2])
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return new File([bytes], filename, { type: mime })
+}
+
+/** Sync capture so OS-camera fallback can still run inside the user gesture. */
+function captureFromStreamSync(): File | null {
   const video = videoEl.value
   if (!video || !streamReady.value || video.videoWidth === 0) return null
 
@@ -265,12 +318,12 @@ async function captureFromStream(): Promise<File | null> {
   }
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', 0.92)
-  })
-  if (!blob) return null
-
-  return new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' })
+  try {
+    return dataUrlToFile(canvas.toDataURL('image/jpeg', 0.92), `capture-${Date.now()}.jpg`)
+  } catch (error) {
+    console.error(error)
+    return null
+  }
 }
 
 function openFileCapture() {
@@ -280,18 +333,19 @@ function openFileCapture() {
   input.click()
 }
 
-async function onShutter() {
+function onShutter() {
   if (capturing.value) return
   capturing.value = true
   try {
     if (streamReady.value) {
-      const file = await captureFromStream()
+      const file = captureFromStreamSync()
       if (file) {
         emit('capture', file)
         return
       }
       showToast(t('camera.captureFailed'))
     }
+    // Must stay sync with the click — iOS ignores programmatic click after await.
     openFileCapture()
   } finally {
     capturing.value = false
@@ -322,8 +376,16 @@ function onPageShow(event: PageTransitionEvent) {
 }
 
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible' && !streamReady.value && !switchingCamera.value) {
+  if (document.visibilityState !== 'visible' || switchingCamera.value) return
+  if (!streamReady.value || !isStreamLive()) {
     void startCamera(facingMode.value)
+    return
+  }
+  const video = videoEl.value
+  if (video?.paused) {
+    void playVideo(video).catch(() => {
+      void startCamera(facingMode.value)
+    })
   }
 }
 

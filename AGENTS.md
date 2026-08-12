@@ -20,7 +20,7 @@ Edge Functions / DB はユーザー依頼時のみ本番反映。手順: [`docs/
 
 ## Hard boundaries
 
-- **本番自動デプロイ禁止** — 依頼なく `vercel --prod` / 本番向け `git push` をしない
+- **本番反映は依頼時のみ** — 依頼なく `production` への push / `vercel --prod` をしない（`production` push で Vercel 自動デプロイ）
 - **検証は `/t/test` のみ** — `https://shiori.ikg-systems.com/t/test`
 - **本番旅を触らない** — `/t/summer-boardgames` の URL・Supabase データ・Storage を検証・改変に使わない
 - **slug 再利用禁止** — `summer-boardgames` / `test` を上書きしない

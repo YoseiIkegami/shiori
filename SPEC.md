@@ -370,5 +370,5 @@ RLS 追加: `members` は anon INSERT＋自分（localStorage 保持 id）の UP
 ### 13. 環境・デプロイ
 
 - 手順・ルールの正本: `docs/environments.md`（エージェント短縮版: `.cursor/rules/deploy-environments.mdc`）
-- 本番 trip `/t/summer-boardgames` は運用済み。自動デプロイ・データ改変は禁止
+- 本番 trip `/t/summer-boardgames` は運用済み。データ改変は禁止。フロント本番反映は `production` ブランチへの push（Vercel 自動デプロイ）
 - 動作確認はテスト環境 `/t/test` および新規作成 slug を使う

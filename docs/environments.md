@@ -23,13 +23,13 @@
 | `master` | `develop` に統一。別名として残す |
 
 - 日常の実装は `develop` で行う（`master` は `develop` に追従）
-- リリース時に `production` へ取り込み、明示依頼時のみ `vercel --prod`
-- CI/CD（`develop` への PR チェック、`production` へのゲート付きデプロイ）は今後整備
+- リリースは `production` へマージ／push する（フロントは自動デプロイ）
+- バックエンド（Supabase）は引き続きユーザー明示依頼時のみ反映
 
 ## ルール（必須）
 
-1. **本番への自動デプロイ禁止**  
-   ユーザーが明示的に依頼したときだけフロント／バックエンドを本番反映する。依頼なく `vercel --prod` や本番向け `git push` をしない。
+1. **`production` への push はリリース操作**  
+   Vercel の Production Branch は `production`。このブランチへの push／マージで本番ドメインへ自動デプロイされる。依頼なく `production` へ push しない。手動の `vercel --prod` も依頼時のみ。
 2. **検証はテスト環境**  
    動作確認・実験に `/t/summer-boardgames` を使わない。確認 URL は常に `/t/test`。
 3. **本番旅のデータを触らない**  
@@ -41,21 +41,35 @@
 
 ### 前提
 
-- Vercel プロジェクトにリンク済み（`npx vercel` でログイン・リンク済みであること）
+- Vercel プロジェクトに GitHub リポジトリ（`YoseiIkegami/shiori`）が接続済み
+- Production Branch = `production`（このブランチへの push で本番デプロイ）
 - 環境変数は Vercel ダッシュボード（または `.env` をローカル検証用）に設定
 
-### 手順
+### リリース（本番自動デプロイ）
+
+```bash
+# develop / feature を取り込んだうえで
+git checkout production
+git merge --ff-only <release-commit>
+git push origin production
+```
+
+`production` への push 後、Vercel が本番デプロイする。確認先:
+
+```
+https://shiori.ikg-systems.com/t/test
+```
+
+### 手動デプロイ（テスト反映・緊急時）
+
+任意ブランチの作業ツリーから本番ドメインへ出すとき（例: 「テスト環境にデプロイ」）:
 
 ```bash
 npm run build
 npx vercel --prod --yes
 ```
 
-ビルド失敗時はデプロイしない。成功後の確認先:
-
-```
-https://shiori.ikg-systems.com/t/test
-```
+ビルド失敗時はデプロイしない。成功後の確認先は同じく `/t/test`。
 
 ### SPA ルーティング
 
