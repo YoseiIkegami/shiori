@@ -14,7 +14,11 @@ cp .env.example .env   # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
 npm install
 npm run dev            # HTTPS self-signed → https://localhost:5173
 npm run build          # vue-tsc + vite build（変更後の検証ゲート）
+npm run lint           # ESLint（誤り検出。整形は Prettier に一任）
+npm run format         # Prettier 整形（任意。既存一括整形は破壊的なので別コミットで）
 ```
+
+FE ツール・UI レギュレーションの入口: [`docs/frontend-tooling.md`](docs/frontend-tooling.md)。
 
 Edge Functions / DB はユーザー依頼時のみ本番反映。手順: [`docs/environments.md`](docs/environments.md)、[`docs/backend.md`](docs/backend.md)。
 
@@ -38,6 +42,7 @@ Edge Functions / DB はユーザー依頼時のみ本番反映。手順: [`docs/
 | DB / RLS | [`docs/data-model.md`](docs/data-model.md) |
 | API | [`docs/backend.md`](docs/backend.md) |
 | UI・文言トーン | [`docs/design-system.md`](docs/design-system.md)、[`.cursor/rules/concise-ui-copy.mdc`](.cursor/rules/concise-ui-copy.mdc)、[`.cursor/rules/fit-viewport.mdc`](.cursor/rules/fit-viewport.mdc) |
+| FE 規約・lint/format | [`docs/frontend-tooling.md`](docs/frontend-tooling.md) |
 | i18n | [`docs/i18n.md`](docs/i18n.md) |
 | デプロイ | [`docs/environments.md`](docs/environments.md) + skill `deploy-test` |
 | i18n 監査 | skill `i18n-audit` |
