@@ -21,6 +21,13 @@ export function installSafariGestureLock(): () => void {
     lastTouchEnd = now
   }
 
+  const onTouchStart = (event: TouchEvent) => {
+    if (isPhotoSwipeOpen()) return
+    if (event.touches.length > 1) {
+      event.preventDefault()
+    }
+  }
+
   const onTouchMove = (event: TouchEvent) => {
     if (isPhotoSwipeOpen()) return
     // Block pinch-zoom; leave single-finger moves for Draggable / buttons.
@@ -34,17 +41,26 @@ export function installSafariGestureLock(): () => void {
     event.preventDefault()
   }
 
+  const onDblClick = (event: MouseEvent) => {
+    if (isPhotoSwipeOpen()) return
+    event.preventDefault()
+  }
+
+  document.addEventListener('touchstart', onTouchStart, { passive: false })
   document.addEventListener('touchend', onTouchEnd, { passive: false })
   document.addEventListener('touchmove', onTouchMove, { passive: false })
   document.addEventListener('gesturestart', onGesture, { passive: false })
   document.addEventListener('gesturechange', onGesture, { passive: false })
   document.addEventListener('gestureend', onGesture, { passive: false })
+  document.addEventListener('dblclick', onDblClick, { passive: false })
 
   return () => {
+    document.removeEventListener('touchstart', onTouchStart)
     document.removeEventListener('touchend', onTouchEnd)
     document.removeEventListener('touchmove', onTouchMove)
     document.removeEventListener('gesturestart', onGesture)
     document.removeEventListener('gesturechange', onGesture)
     document.removeEventListener('gestureend', onGesture)
+    document.removeEventListener('dblclick', onDblClick)
   }
 }

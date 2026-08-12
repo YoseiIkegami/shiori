@@ -187,12 +187,20 @@
   "camera": {
     "label": "Camera",
     "idleHint": "Press the shutter to shoot",
+    "starting": "Starting camera…",
     "remainPrefix": "",
     "remainSuffix": "left",
     "shutter": "Take a photo",
     "switchCamera": "Switch camera",
     "toFront": "Switched to front camera",
-    "toBack": "Switched to back camera"
+    "toBack": "Switched to back camera",
+    "captureFailed": "Could not take the photo",
+    "switchFailed": "Could not switch camera",
+    "errorInsecure": "HTTPS is required for the camera",
+    "errorUnsupported": "Camera is not supported in this browser",
+    "errorDenied": "Camera permission is required",
+    "errorNotFound": "No camera was found",
+    "errorGeneric": "Could not open the camera"
   },
   "filter": {
     "none": "Normal",

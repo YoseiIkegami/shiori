@@ -152,6 +152,14 @@ MEMO-1 は正式チケット化前の観察メモ。実旅で封筒→ボード�
 | UX-15 | 表示名を言語自由に | `name` と内部 `slug` を分離。作成UIの英数字・重複チェック削除 | 中 | 完了 |
 | PRIV-1 | FREE 版はシェアさせない運用に | 「その人が離れたら削除（旅をはじめるボタンで /create に戻った時＝既存の `onFreeRestart`）」を正とし、URL コピペ防止のような厳密な制限は不要と判断。代わりに `CheckoutSuccessPage.vue` で FREE 版（`plan_id==='free'`）は共有系UI（その他の共有方法・QR・幹事メニュー・「リンクを送る」ボタン）を非表示にし、「撮影をはじめる」のみを主導線に | 中 | 完了 |
 
+## バグ（2026-08-12）
+
+| ID | 課題 | 詳細 | 優先度 | ステータス |
+|---|---|---|---|---|
+| BUG-2 | iOS Safari でカメラが黒画面 | 静的プレースホルダーのみでライブプレビューなし + `display:none` の file input が iOS で動かない。`getUserMedia` 復帰・file input 修正 | 高 | 完了 |
+| BUG-3 | iOS Safari でダブルタップ拡大 | `touch-action: manipulation` + gesture lock 強化 | 中 | 完了 |
+| BUG-4 | Trial 版が success 画面を経由 | FREE 作成後は `/t/{share_token}` へ直行 | 中 | 完了 |
+
 ## バグ（2026-07-26 フィードバック）
 
 | ID | 課題 | 詳細 | 優先度 | ステータス |

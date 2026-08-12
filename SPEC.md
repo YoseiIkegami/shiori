@@ -30,7 +30,7 @@
 | 機能 | 実装方針 |
 |---|---|
 | リンク発行 | 手動でSupabaseに1行INSERT（`trips`。`slug` で短いURL）。リンク形式は `…/t/{slug}`（例: `/t/summer-boardgames`） |
-| カメラ起動 | 静的ビューファインダーのシャッターで `<input type="file" accept="image/*" capture="environment">` を発火（OS標準カメラ。getUserMedia は使わない） |
+| カメラ起動 | `getUserMedia` でライブプレビュー。シャッターはストリームキャプチャ、失敗時は `<input type="file" accept="image/*" capture>` で OS 標準カメラにフォールバック |
 | 画像形式統一 | HEIC変換（heic2any）→ EXIF回転補正（blueimp-load-image）→ 3:4（1080×1440）にセンタークロップ |
 | コメント入力（**必須**） | Vantの`Popup`で下から出るシート。全体で30文字以内（`maxlength=30`）。空文字では次へ進めない |
 | **画像合成（重要）** | **confirm時、1200×1800 Canvasに「3:4写真＋任意の軽いフィルター＋白フレーム＋コメント＋撮影日」を1枚のJPEGとして合成する。回転角・重なり順は焼き込まない** |

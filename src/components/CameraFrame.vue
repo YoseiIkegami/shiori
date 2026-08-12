@@ -1,14 +1,36 @@
 <template>
   <section class="camera-screen" :aria-label="t('camera.label')">
+    <video
+      v-show="streamReady"
+      ref="bgVideoEl"
+      class="camera-bg-live"
+      :class="{ mirror: facingMode === 'user' }"
+      playsinline
+      webkit-playsinline
+      muted
+      autoplay
+      aria-hidden="true"
+    ></video>
+
     <div class="camera-body">
       <div class="device-body">
         <span class="charge-indicator" aria-hidden="true" title="チャージ"></span>
 
         <div class="finder-shell">
           <div class="finder">
-            <!-- Static idle well (no live stream). File capture opens OS camera on shutter. -->
-            <div class="finder-fallback">
-              <p>{{ t('camera.idleHint') }}</p>
+            <video
+              v-show="streamReady"
+              ref="videoEl"
+              class="live"
+              :class="{ mirror: facingMode === 'user' }"
+              playsinline
+              webkit-playsinline
+              muted
+              autoplay
+            ></video>
+            <div v-if="!streamReady" class="finder-fallback">
+              <p v-if="cameraError">{{ cameraError }}</p>
+              <p v-else>{{ t('camera.starting') }}</p>
             </div>
           </div>
 
@@ -22,7 +44,6 @@
         </div>
 
         <div class="control-row">
-          <!-- フィルターは撮影後のプレビューで選ぶ（Instagram式）。シャッター中央維持のスペーサー -->
           <span class="side-spacer" aria-hidden="true"></span>
 
           <button
@@ -39,6 +60,7 @@
             type="button"
             class="side-btn camera-switch-btn btn-control"
             :aria-label="t('camera.switchCamera')"
+            :disabled="switchingCamera"
             @click="toggleFacing"
           >
             <svg class="pict" viewBox="0 0 24 24" aria-hidden="true">
@@ -73,17 +95,15 @@
       </div>
     </div>
 
-    <!--
-      TODO(verify-on-device): On iOS Safari, does capture still offer Photo Library?
-      Facing toggles capture=environment|user for the native camera preference.
-    -->
     <input
       :key="facingMode"
       ref="fileInput"
-      class="hidden-input"
+      class="capture-input"
       type="file"
       accept="image/*"
       :capture="facingMode"
+      tabindex="-1"
+      aria-hidden="true"
       @change="onFileChange"
     />
   </section>
@@ -110,24 +130,169 @@ const emit = defineEmits<{
 
 type Facing = 'environment' | 'user'
 
+const videoEl = ref<HTMLVideoElement | null>(null)
+const bgVideoEl = ref<HTMLVideoElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const odometerEl = ref<HTMLElement | null>(null)
+const streamReady = ref(false)
+const cameraError = ref<string | null>(null)
 const capturing = ref(false)
+const switchingCamera = ref(false)
 const facingMode = ref<Facing>('environment')
+let mediaStream: MediaStream | null = null
 let odometer: InstanceType<typeof Odometer> | null = null
 
 const remaining = computed(() => Math.max(0, props.maxPhotos - props.photosCount))
 
-function toggleFacing() {
-  facingMode.value = facingMode.value === 'environment' ? 'user' : 'environment'
-  showToast(facingMode.value === 'user' ? t('camera.toFront') : t('camera.toBack'))
+function bindStreamToVideo(video: HTMLVideoElement, stream: MediaStream) {
+  video.srcObject = stream
+  video.setAttribute('playsinline', 'true')
+  video.setAttribute('webkit-playsinline', 'true')
+  video.muted = true
 }
 
-function onShutter() {
+async function playVideo(video: HTMLVideoElement) {
+  if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+    await new Promise<void>((resolve) => {
+      const onReady = () => {
+        video.removeEventListener('loadedmetadata', onReady)
+        resolve()
+      }
+      video.addEventListener('loadedmetadata', onReady, { once: true })
+    })
+  }
+  await video.play()
+}
+
+function stopCamera() {
+  mediaStream?.getTracks().forEach((track) => track.stop())
+  mediaStream = null
+  if (videoEl.value) videoEl.value.srcObject = null
+  if (bgVideoEl.value) bgVideoEl.value.srcObject = null
+  streamReady.value = false
+}
+
+async function startCamera(facing: Facing = facingMode.value) {
+  cameraError.value = null
+  streamReady.value = false
+
+  if (!window.isSecureContext) {
+    cameraError.value = t('camera.errorInsecure')
+    return
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraError.value = t('camera.errorUnsupported')
+    return
+  }
+
+  stopCamera()
+
+  const tryGetUserMedia = async (constraints: MediaStreamConstraints) => {
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+    facingMode.value = facing
+    const video = videoEl.value
+    if (!video) return
+    bindStreamToVideo(video, mediaStream)
+    const bg = bgVideoEl.value
+    if (bg) bindStreamToVideo(bg, mediaStream)
+    await playVideo(video)
+    if (bg) await playVideo(bg).catch(() => undefined)
+    streamReady.value = video.videoWidth > 0
+  }
+
+  try {
+    await tryGetUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: facing },
+        width: { ideal: 1440 },
+        height: { ideal: 1920 },
+      },
+    })
+  } catch (error) {
+    console.error(error)
+    const name = error instanceof DOMException ? error.name : ''
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      cameraError.value = t('camera.errorDenied')
+      return
+    }
+
+    try {
+      await tryGetUserMedia({ audio: false, video: true })
+      return
+    } catch (retryError) {
+      console.error(retryError)
+    }
+
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      cameraError.value = t('camera.errorNotFound')
+    } else {
+      cameraError.value = t('camera.errorGeneric')
+    }
+  }
+}
+
+async function toggleFacing() {
+  if (switchingCamera.value) return
+  switchingCamera.value = true
+  const next: Facing = facingMode.value === 'environment' ? 'user' : 'environment'
+  try {
+    await startCamera(next)
+    if (!streamReady.value) {
+      showToast(t('camera.switchFailed'))
+    } else {
+      showToast(next === 'user' ? t('camera.toFront') : t('camera.toBack'))
+    }
+  } finally {
+    switchingCamera.value = false
+  }
+}
+
+async function captureFromStream(): Promise<File | null> {
+  const video = videoEl.value
+  if (!video || !streamReady.value || video.videoWidth === 0) return null
+
+  const canvas = document.createElement('canvas')
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  if (facingMode.value === 'user') {
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+  }
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', 0.92)
+  })
+  if (!blob) return null
+
+  return new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' })
+}
+
+function openFileCapture() {
+  const input = fileInput.value
+  if (!input) return
+  input.value = ''
+  input.click()
+}
+
+async function onShutter() {
   if (capturing.value) return
   capturing.value = true
   try {
-    fileInput.value?.click()
+    if (streamReady.value) {
+      const file = await captureFromStream()
+      if (file) {
+        emit('capture', file)
+        return
+      }
+      showToast(t('camera.captureFailed'))
+    }
+    openFileCapture()
   } finally {
     capturing.value = false
   }
@@ -151,6 +316,17 @@ function initOdometer() {
   })
 }
 
+function onPageShow(event: PageTransitionEvent) {
+  if (!event.persisted) return
+  void startCamera(facingMode.value)
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible' && !streamReady.value && !switchingCamera.value) {
+    void startCamera(facingMode.value)
+  }
+}
+
 watch(remaining, (value) => {
   if (odometer) odometer.update(value)
   else if (odometerEl.value) odometerEl.value.textContent = String(value)
@@ -159,10 +335,16 @@ watch(remaining, (value) => {
 onMounted(async () => {
   await nextTick()
   initOdometer()
+  void startCamera('environment')
+  window.addEventListener('pageshow', onPageShow)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
+  stopCamera()
   odometer = null
+  window.removeEventListener('pageshow', onPageShow)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
@@ -173,6 +355,18 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: transparent;
+}
+
+.camera-bg-live {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.1);
+  filter: blur(20px) brightness(0.8) saturate(0.9);
+  pointer-events: none;
 }
 
 .camera-body {
@@ -243,6 +437,24 @@ onBeforeUnmount(() => {
     inset -2px -2px 4px rgba(255, 255, 255, 0.28);
 }
 
+.live {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111415;
+}
+
+.live.mirror,
+.camera-bg-live.mirror {
+  transform: scaleX(-1);
+}
+
+.camera-bg-live.mirror {
+  transform: scale(1.1) scaleX(-1);
+}
+
 .finder-fallback {
   position: absolute;
   inset: 0;
@@ -309,6 +521,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+.side-btn:disabled {
+  opacity: 0.55;
+}
+
 .side-spacer {
   width: 48px;
   height: 48px;
@@ -329,6 +545,7 @@ onBeforeUnmount(() => {
   border: 0;
   background: #fff;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .shutter-button:disabled {
@@ -349,8 +566,14 @@ onBeforeUnmount(() => {
   transform: scale(0.98);
 }
 
-.hidden-input {
-  display: none;
+/* iOS Safari blocks programmatic click on display:none inputs */
+.capture-input {
+  position: fixed;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
 }
 </style>
 

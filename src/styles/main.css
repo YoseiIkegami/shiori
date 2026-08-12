@@ -44,6 +44,7 @@ body,
   min-height: 100%;
   min-height: 100dvh;
   overscroll-behavior-x: none;
+  touch-action: manipulation;
 }
 
 body {

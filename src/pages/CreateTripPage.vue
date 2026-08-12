@@ -253,16 +253,8 @@ async function onSubmit() {
     if (res.free && res.slug && res.organizer_token) {
       storeFreeOrganizerToken(res.slug, res.organizer_token)
       submitting.value = false
-      void router.push({
-        path: '/create/success',
-        query: {
-          free: '1',
-          share: res.share_token ?? '',
-          slug: res.slug,
-          name,
-          token: res.organizer_token,
-        },
-      })
+      const shareKey = res.share_token ?? res.slug
+      void router.push(`/t/${shareKey}`)
       return
     }
     if (freeToken && freeSlug) clearFreeOrganizerToken(freeSlug)

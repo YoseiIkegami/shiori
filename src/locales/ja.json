@@ -199,12 +199,20 @@
   "camera": {
     "label": "撮影画面",
     "idleHint": "シャッターを押して撮影",
+    "starting": "カメラを起動しています…",
     "remainPrefix": "あと",
     "remainSuffix": "枚",
     "shutter": "写真を撮る",
     "switchCamera": "カメラ切替",
     "toFront": "インカメラに切替",
-    "toBack": "アウトカメラに切替"
+    "toBack": "アウトカメラに切替",
+    "captureFailed": "撮影に失敗しました",
+    "switchFailed": "カメラを切り替えられませんでした",
+    "errorInsecure": "カメラには HTTPS が必要です",
+    "errorUnsupported": "このブラウザではカメラを使えません",
+    "errorDenied": "カメラの許可が必要です",
+    "errorNotFound": "カメラが見つかりませんでした",
+    "errorGeneric": "カメラを開けませんでした"
   },
   "filter": {
     "none": "Normal",

@@ -23,9 +23,9 @@ idle（カメラ）
 
 ### カメラ起動
 
-- **getUserMedia は使わない**
-- 静的ビューファインダー + `<input type="file" accept="image/*" capture="environment">` で OS 標準カメラ
-- 前面 / 背面は `capture` 属性で切替
+- マウント時に `getUserMedia` でライブプレビューを表示（iOS Safari は `playsinline` 必須）
+- シャッターはストリームからキャプチャ。失敗時は `<input type="file" accept="image/*" capture>` で OS 標準カメラにフォールバック
+- 前面 / 背面は `facingMode` で切替
 
 ### 画像処理
 
