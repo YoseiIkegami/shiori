@@ -6,6 +6,7 @@
 |---|---|
 | 本番 | https://shiori.ikg-systems.com |
 | 検証用 trip | https://shiori.ikg-systems.com/t/test |
+| 開発ストーリー | [Qiita — サービス化した話](https://qiita.com/yosei_ikegami/items/c447601aa22b88ec4475) |
 | 仕様の正本 | [`SPEC.md`](./SPEC.md) |
 | 開発ドキュメント | [`docs/`](./docs/README.md) |
 | エージェント向け | [`AGENTS.md`](./AGENTS.md) |
