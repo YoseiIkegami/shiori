@@ -25,6 +25,7 @@
 | [バックエンド API](./backend.md) | Edge Functions・クライアント API |
 | [デザインシステム](./design-system.md) | ニューモーフィズム・文言・共通 UI |
 | [環境・デプロイ](./environments.md) | 本番 / テスト・デプロイ手順と禁止事項 |
+| [Git ブランチ運用](./git-workflow.md) | `main` / `production` の流れ・リリース手順 |
 | [多言語](./i18n.md) | vue-i18n・locale・通貨 |
 | [Cloudflare / CSAM](./cloudflare-csam.md) | プロキシ・スキャン・削除 Cron 手順 |
 | [実装状況](./implementation-status.md) | 完了分と残 TODO |

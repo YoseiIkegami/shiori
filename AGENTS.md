@@ -40,6 +40,7 @@ Edge Functions / DB はユーザー依頼時のみ本番反映。手順: [`docs/
 | UI・文言トーン | [`docs/design-system.md`](docs/design-system.md)、[`.cursor/rules/concise-ui-copy.mdc`](.cursor/rules/concise-ui-copy.mdc)、[`.cursor/rules/fit-viewport.mdc`](.cursor/rules/fit-viewport.mdc) |
 | i18n | [`docs/i18n.md`](docs/i18n.md) |
 | デプロイ | [`docs/environments.md`](docs/environments.md) + skill `deploy-test` |
+| ブランチ運用 | [`docs/git-workflow.md`](docs/git-workflow.md) |
 | i18n 監査 | skill `i18n-audit` |
 
 実装と docs が食い違う → **先に `SPEC.md` を更新**してからコード。エージェントが独断で仕様変更しない（[`.cursor/rules/spec-authority.mdc`](.cursor/rules/spec-authority.mdc)）。

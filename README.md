@@ -50,17 +50,21 @@ npm run build          # 型チェック + 本番ビルド
 | テスト環境 | `/t/test` | **動作確認はここだけ** |
 | 本番旅 | `/t/summer-boardgames` | 運用中。**検証・データ改変禁止** |
 
-詳細: [`docs/environments.md`](./docs/environments.md)
+詳細: [`docs/environments.md`](./docs/environments.md) · ブランチ運用: [`docs/git-workflow.md`](./docs/git-workflow.md)
 
 ## Git ブランチ
 
 | ブランチ | 役割 |
 |---|---|
-| `main` | 開発の既定ブランチ |
-| `develop` | `main` と同内容に揃える作業用 |
-| `production` | 本番反映。Vercel Production Branch（push で自動デプロイ） |
+| `main` | 開発の既定ブランチ（GitHub default） |
+| `develop` | `main` と揃える作業用（任意） |
+| `production` | 本番反映。Vercel が push で自動デプロイ |
 
-日常の実装は `main`（または `develop`）で行い、リリース時に `production` へマージする。バックエンド（Supabase）はユーザー明示依頼時のみ反映。
+```text
+feature → main → production → Vercel 本番 → /t/test で確認
+```
+
+手順・禁止事項・バックエンド反映の区別は [`docs/git-workflow.md`](./docs/git-workflow.md) を参照。
 
 ## バックエンド
 

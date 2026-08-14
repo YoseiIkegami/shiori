@@ -16,15 +16,16 @@
 
 ## Git ブランチ
 
+ブランチ運用の正本: **[`git-workflow.md`](./git-workflow.md)**（日常開発・リリース・禁止事項）
+
 | ブランチ | 役割 |
 |---|---|
-| `production` | リリース済みの安定線。本番反映の基準 |
-| `main` | 開発の既定ブランチ（`develop` と同内容に揃える） |
-| `develop` | `main` に追従する作業用 |
+| `main` | 開発の既定ブランチ（GitHub default） |
+| `develop` | `main` に追従する作業用（任意） |
+| `production` | 本番反映。Vercel Production Branch |
 
-- 日常の実装は `main` で行う（`develop` は `main` に追従）
-- リリースは `production` へマージ／push する（フロントは自動デプロイ）
-- バックエンド（Supabase）は引き続きユーザー明示依頼時のみ反映
+- リリースは `main` → `production` へマージ／push（フロント自動デプロイ）
+- バックエンド（Supabase）はブランチと連動しない。反映は明示依頼時のみ
 
 ## ルール（必須）
 
