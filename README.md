@@ -2,85 +2,75 @@
 
 届くまで開かない、旅のポラロイド。共有リンクから写真＋コメントを投稿し、枚数が揃うと同じ URL で一斉に見られます。
 
-**ドキュメント**: 現行仕様の整理版は [`docs/`](./docs/README.md)。設計の正本は [`SPEC.md`](./SPEC.md)。  
-**エージェント**: [`AGENTS.md`](./AGENTS.md)。汎用 harness は隣接リポ [`agent-harness-kit`](../agent-harness-kit/)。
+| | |
+|---|---|
+| 本番 | https://shiori.ikg-systems.com |
+| 検証用 trip | https://shiori.ikg-systems.com/t/test |
+| 仕様の正本 | [`SPEC.md`](./SPEC.md) |
+| 開発ドキュメント | [`docs/`](./docs/README.md) |
+| エージェント向け | [`AGENTS.md`](./AGENTS.md) |
 
 ## 技術スタック
 
-- Vue 3 + Vite + Vant
+- Vue 3 · Vite · Vant · vue-i18n
 - Supabase（Postgres / Storage / Edge Functions）
+- Stripe Checkout · Resend（幹事メール）
 - Vercel ホスティング
-- `heic2any` / `blueimp-load-image` / PhotoSwipe v5
-- 写真加工: Canvas ImageData による軽いトーン／粒子を任意で焼き込み（CamanJS / LUT は未使用）
+- `heic2any` / `blueimp-load-image` / PhotoSwipe v5 / GSAP
 
-## セットアップ
-
-### 1. フロント
+## クイックスタート
 
 ```bash
-cp .env.example .env
-# VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を記入
+cp .env.example .env   # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
 npm install
-npm run dev
+npm run dev            # https://localhost:5173
+npm run build          # 型チェック + 本番ビルド
 ```
 
-開発サーバーは HTTPS（自己署名証明書）で起動します。スマホのライブカメラ確認用:
+開発サーバーは HTTPS（自己署名）。実機カメラ確認は起動ログの Network URL（`https://192.168.x.x:5173`）を使う。初回は証明書警告を「続行」で通過する。
 
-- PC: `https://localhost:5173/t/{trip_id}`
-- 同じ Wi-Fi のスマホ: `https://192.168.x.x:5173/t/{trip_id}`（起動ログの Network URL）
+## 主な画面
 
-初回は証明書警告が出ます。「詳細」→「続行」で開いてください（自己署名のため正常です）。HTTP の LAN IP では `getUserMedia` が使えません。
+| パス | 内容 |
+|---|---|
+| `/` | ホーム |
+| `/create` | 旅の作成（FREE / Standard / Premium） |
+| `/create/success` | 有料プランの発行完了 |
+| `/t/{share_token}` | 撮影 or 解禁後ボード |
+| `/manage/{share_token}?token=…` | 幹事設定 |
 
-### 2. Supabase
+旅の作成はアプリの `/create` から行う（Stripe Checkout または FREE 即時発行）。手動 SQL INSERT は不要。
 
-1. プロジェクトを作成する
-2. SQL Editor または CLI で [`supabase/migrations`](supabase/migrations) を順番に適用する
-3. Edge Function をデプロイする
+## 環境
+
+| 名称 | URL | 用途 |
+|---|---|---|
+| 本番サイト | https://shiori.ikg-systems.com | 全 trip 共通のフロント |
+| テスト環境 | `/t/test` | **動作確認はここだけ** |
+| 本番旅 | `/t/summer-boardgames` | 運用中。**検証・データ改変禁止** |
+
+詳細: [`docs/environments.md`](./docs/environments.md)
+
+## Git ブランチ
+
+| ブランチ | 役割 |
+|---|---|
+| `main` | 開発の既定ブランチ |
+| `develop` | `main` と同内容に揃える作業用 |
+| `production` | 本番反映。Vercel Production Branch（push で自動デプロイ） |
+
+日常の実装は `main`（または `develop`）で行い、リリース時に `production` へマージする。バックエンド（Supabase）はユーザー明示依頼時のみ反映。
+
+## バックエンド
+
+Edge Functions の一覧・デプロイ手順: [`docs/backend.md`](./docs/backend.md)
 
 ```bash
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-supabase functions deploy reveal-photos
-supabase secrets set ALLOWED_ORIGIN=https://YOUR_APP.vercel.app
+npx supabase functions deploy create-trip-checkout
+npx supabase functions deploy stripe-webhook
+# … 他は backend.md 参照
 ```
 
-`reveal-photos` は有効な anon JWT を要求し、DBの `is_revealed` をサーバー側で再検証します。
+## リポジトリ
 
-### 3. 旅（trip）の作成
-
-ダッシュボードの SQL Editor で手動 INSERT（クライアントからの INSERT は RLS で禁止）:
-
-```sql
-insert into trips (name, reveal_at, max_photos)
-values ('沖縄旅行', now(), 50)
-returning id;
-```
-
-共有 URL: `https://YOUR_DOMAIN/t/{id}`
-
-### 4. Storage CORS
-
-本番デプロイ後、Supabase Dashboard → Storage → Configuration → CORS に Vercel ドメインを追加すること。未設定だとアップロードが失敗します。
-
-### 5. Vercel
-
-- 環境変数: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- [`vercel.json`](vercel.json) で SPA rewrite 済み
-
-## RLS 方針（重要）
-
-| 対象 | anon |
-|------|------|
-| `trips` | SELECT のみ |
-| `photos` | INSERT のみ（SELECT 不可） |
-| Storage `trip-photos` | INSERT のみ（SELECT 不可） |
-
-ギャラリー閲覧は Edge Function `reveal-photos` が `service_role` で `is_revealed` を再検証し、署名付き URL を返します。
-
-## 画面
-
-- `/t/:tripId` — 解禁前: 3:4撮影フロー / 50枚到達後: 封筒演出→写真の山（同一コンポーネント内の state 切替）
-
-## Git
-
-このディレクトリ（`shiori`）単体で `git init` してください。親フォルダ `個人開発` では Git 管理しません。
+このディレクトリ（`shiori`）単体で Git 管理する。親フォルダでは管理しない。
